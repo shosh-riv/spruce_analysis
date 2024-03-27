@@ -14,7 +14,7 @@ setwd("../")
 # limit it to our year of interest (2021)
 
 # Vector of all files
-env_filenames <- list.files("./Data/WEW_Complete_Environ_20220518/",full.names = T)
+env_filenames <- list.files("./Data/Raw/WEW_Complete_Environ_20220518/",full.names = T)
 
 # Read in all as single list object
 env_data_list <- lapply(env_filenames,read.csv)
