@@ -150,3 +150,5 @@ head(soiltemp_raw)
 # some of them?
 
 #### Phenology ####
+# Read in raw data
+phen_raw <- read.csv("./Data/Raw/SPRUCE_Ground_phenology_observations_2022.csv")
