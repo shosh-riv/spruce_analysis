@@ -141,14 +141,65 @@ env_data$PAR_2 <- as.numeric(env_data$PAR_2)
 ## Save this
 write.csv(env_data,"./Data/Clean/environmental_data_2021.csv",row.names=F)
 
-#### Soil temperature ####
-soiltemp_raw <- read.csv("./Data/Figure3_Soil_Temperature_20170223.csv")
-head(soiltemp_raw)
-# Is it actually necessary to read this in separately? We can calculate it from the
-# data we've already got, if we need it. Does it maybe make sense to calculate
-# day-long averages for each variable regardless? Choose a depth of interest for
-# some of them?
+#### Daily environmental ####
+# Currently, we have the environmental data for every half hour of the whole year.
+# Our response datasets (e.g. phenology) contain data at a temporal resolution of
+# 1 day, so we'll take daily averages of the environmental data.
+
+# Read in half-hourly data
+env_data_full <- read.csv("./Data/Clean/environmental_data_2021.csv")
+
+# Names of columns that remain relevant with daily data (timestamp, etc. become 
+# unnecessary) and environmental data
+daily_cols <- colnames(env_data_full)[c(1,6,8:ncol(env_data_full))]
+
+# Aggregate data by day and plot, removing NAs from the calculations
+env_data_daily <- aggregate(env_data_full[,daily_cols],
+                            by=list(env_data_full$Day_of_Year,
+                                    env_data_full$Plot),
+                            FUN = mean,na.rm=T)
+
+# Make sure this worked the way we wanted it to
+table(env_data_daily$Plot)
+# Each of the 12 plots has 365 entries, one for every day of the year. This is correct
+
+# Check overall structure of new dataset
+summary(env_data_daily)
+
+# Columns Group.1, Group.2, and plot_number contain redundant information - remove them
+env_data_daily <- env_data_daily[,-which(colnames(env_data_daily) %in% c("Group.1","Group.2","plot_number"))]
+
+# Quite a few columns have 2 NAs -- assume this is a complete lack of data for that
+# column on that day, but check in larger dataset to make sure
+env_data_daily[which(is.na(env_data_daily$TS_0__A1)),c("Day_of_Year","Plot")]
+env_data_full[which(env_data_full$Day_of_Year==226 &
+                      env_data_full$Plot==10),"TS_0__A1"]
+env_data_full[which(env_data_full$Day_of_Year==227 &
+                      env_data_full$Plot==10),"TS_0__A1"]
+# As expected -- all NAs. 
+
+# Some columns (TS_.100__A8, TS_.200__A9, TS_.200__C9) have around 40 NAs. These are also
+# the ones that had thousands of NAs in the half-hourly dataset, so this isn't
+# surprising and doesn't need to be investigated further.
+
+# Save this daily data.
+write.csv(env_data_daily,"./Data/Clean/dailymean_environmental_data_2021.csv",row.names = F)
+
 
 #### Phenology ####
 # Read in raw data
-phen_raw <- read.csv("./Data/Raw/SPRUCE_Ground_phenology_observations_2022.csv")
+phen_raw <- read.csv("./Data/Raw/SPRUCE_Ground_phenology_observations_2021.csv",
+                     na.strings = c("",-9999))
+summary(phen_raw)
+
+# Is enclosure in this dataset the same as plot?
+unique(phen_raw$Enclosure)
+# Yes. Remove the "Plot " prefix so we can merge with environmental data
+phen_raw$Plot <- as.numeric(stringr::str_extract(phen_raw$Enclosure,"\\d+"))
+
+# Add environmental data
+phen_env <- merge(phen_raw,env_data_daily,by.x = c("Plot","DOY"),
+                  by.y=c("Plot","Day_of_Year"),all.x=T,all.y=F)
+
+# Save
+write.csv(phen_env,"./Data/Clean/phenology_environment.csv",row.names=F)
