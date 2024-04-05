@@ -150,24 +150,40 @@ write.csv(env_data,"./Data/Clean/environmental_data_2021.csv",row.names=F)
 env_data_full <- read.csv("./Data/Clean/environmental_data_2021.csv")
 
 # Names of columns that remain relevant with daily data (timestamp, etc. become 
-# unnecessary) and environmental data
-daily_cols <- colnames(env_data_full)[c(1,6,8:ncol(env_data_full))]
+# unnecessary) and environmental data except for precipitation
+daily_cols <- colnames(env_data_full)[c(1,6,8:(ncol(env_data_full)-2))]
 
-# Aggregate data by day and plot, removing NAs from the calculations
+# Sum up precipitation by day and plot
+daily_precip <- aggregate(env_data_full[,"PREC_6"],
+                            by=list(env_data_full$Day_of_Year,
+                                    env_data_full$Plot),
+                            FUN = sum,na.rm=T)
+colnames(daily_precip) <- c("Day_of_Year","Plot","PREC_6")
+
+# Aggregate the other data by averaging over day and plot, removing NAs from the calculations
 env_data_daily <- aggregate(env_data_full[,daily_cols],
                             by=list(env_data_full$Day_of_Year,
                                     env_data_full$Plot),
                             FUN = mean,na.rm=T)
 
-# Make sure this worked the way we wanted it to
+# Group.1 and Group.2 are extraneous - they are the same as Day_of_Year and Plot (confirm)
+# Confirm this
+sum(env_data_daily$Group.1==env_data_daily$Day_of_Year) == nrow(env_data_daily)
+sum(env_data_daily$Group.2==env_data_daily$Plot) == nrow(env_data_daily)
+
+# Remove columns
+env_data_daily$Group.1 <- NULL
+env_data_daily$Group.2 <- NULL
+
+# Merge this with the precip data
+env_data_daily <- merge(env_data_daily,daily_precip,by=c("Day_of_Year","Plot"))
+
+# Make sure this all worked the way we wanted it to
 table(env_data_daily$Plot)
 # Each of the 12 plots has 365 entries, one for every day of the year. This is correct
 
 # Check overall structure of new dataset
 summary(env_data_daily)
-
-# Columns Group.1, Group.2, and plot_number contain redundant information - remove them
-env_data_daily <- env_data_daily[,-which(colnames(env_data_daily) %in% c("Group.1","Group.2","plot_number"))]
 
 # Quite a few columns have 2 NAs -- assume this is a complete lack of data for that
 # column on that day, but check in larger dataset to make sure
@@ -196,6 +212,9 @@ summary(phen_raw)
 unique(phen_raw$Enclosure)
 # Yes. Remove the "Plot " prefix so we can merge with environmental data
 phen_raw$Plot <- as.numeric(stringr::str_extract(phen_raw$Enclosure,"\\d+"))
+
+# Look at the phenological classifications
+unique(phen_raw$Phenophase)
 
 # Add environmental data
 phen_env <- merge(phen_raw,env_data_daily,by.x = c("Plot","DOY"),
