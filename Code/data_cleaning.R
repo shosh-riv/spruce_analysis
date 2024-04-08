@@ -213,8 +213,20 @@ unique(phen_raw$Enclosure)
 # Yes. Remove the "Plot " prefix so we can merge with environmental data
 phen_raw$Plot <- as.numeric(stringr::str_extract(phen_raw$Enclosure,"\\d+"))
 
-# Look at the phenological classifications
-unique(phen_raw$Phenophase)
+## The rest of our data only has two dates, one in June and one in August. Do we have
+## enough phenological observations to actually use phenological data?
+
+
+# Change the date column to be formatted as date
+phen_raw$Calendar.Date <- as.Date(phen_raw$Calendar.Date,format="%Y-%m-%d")
+
+# Create column for month of observation
+phen_raw$Month <- format(phen_raw$Calendar.Date, "%m")
+
+# Check how many observations per plot per month
+table(phen_raw[,c("Plot","Month")])
+## There are a few observations in June, but barely any in August - can't include
+## phenology in any modeling after all.
 
 # Add environmental data
 phen_env <- merge(phen_raw,env_data_daily,by.x = c("Plot","DOY"),
