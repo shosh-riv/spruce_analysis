@@ -18,6 +18,15 @@ env$Sample_date <- as.character(as.Date(env$Day_of_Year,origin="2020-12-31"))
 spruce <- merge(spruce_orig,env[,c("Sample_date","Plot","PREC_6")],
                  by=c("Sample_date","Plot"),all.x=T,all.y=F)
 
+# Due to "heterogeneity between the two replicate samples" used to calculate MBN
+# and MBC, there are a few negative values that naturally become NAs when log-transformed.
+# Since negative values are nonsensical, we'll change these values to 0 
+# to reflect that they have a very small microbial biomass. We'll then add 1
+# to DN and DOC for the log transformation.
+spruce[which(spruce$MBN<0),"MBN"] <- 0
+spruce[which(spruce$MBC<0),"MBC"] <- 0
+
+
 #### Covariance matrix ####
 # First, investigate correlations
 GGally::ggpairs(spruce[,c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")],
@@ -26,6 +35,11 @@ GGally::ggpairs(spruce[,c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")],
 # Remove outlier from MBN
 GGally::ggpairs(spruce[-which(spruce$MBN>100),c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")],
                 lower=list(continuous="smooth_lm"))
+
+# Full covariance matrix
+GGally::ggpairs(subset(spruce, MBN < 100, select = -c(Sample_date,Plot,X,datesitedepth)),
+                lower=list(continuous="smooth_lm"))
+# Considering half our variables are categorical right now maybe this wasn't the right choice...
 
 # for app: allow user to choose response variables, predictor variables -- 
 # construct SEM from there. but DEFAULT to what we think the most reasonable 
@@ -167,23 +181,34 @@ plot(MBC_log_lm)
 # Honestly not sure which is better! Maybe go with log-transformed for consistency. 
 # Ask for feedback.
 
-
 #### Scale, log-transform data ####
 # Log-transform the variables that need log-transformation as determined above.
 # Also scale the entire dataset.
 spruce_no_out <- spruce
 spruce_no_out[139,"MBN"] <- NA
-spruce_log_scale <- spruce_no_out
+
+# The ambient temperature treatment is very different to the 0.00 treatment. Since
+# the ambient plots were treated differently to the rest of the plots and may
+# not be comparable, so we'll remove them.
+spruce_noAmb <- spruce_no_out[-which(spruce_no_out$Temp_experimental=="Amb"),]
+
+# Initialize dataframe for transformation/scaling
+spruce_log_scale <- spruce_noAmb
 
 ### Log-transformation
-to_transform <- c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")
-spruce_log_scale[,to_transform] <- log(spruce[,to_transform])
 
-# Due to "heterogeneity between the two replicate samples" used to calculate MBN
-# and MBC, there are a few negative values that naturally become NAs when log-transformed.
-# Since negative values are nonsensical, having NAs for those values is desired behavior.
-# Another option would be to change these values to 0 or to a very small value,
-# to reflect that they have a very small microbial biomass.
+# Variables to transform
+to_transform <- c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")
+
+# Check for 0s
+apply(spruce_log_scale[,to_transform],2,FUN=min,na.rm=T)
+
+# Add 1 to MBC and MBN because they include 0
+spruce_log_scale$MBN <- spruce_log_scale$MBN + 1
+spruce_log_scale$MBC <- spruce_log_scale$MBC + 1
+
+# Transform
+spruce_log_scale[,to_transform] <- log(spruce_log_scale[,to_transform])
 
 ### Scale all numerical values
 # Vector of numeric columns
@@ -202,7 +227,7 @@ colnames(spruce_log_scale)[to_scale]
 # Scale columns
 spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
 
-# Remove all NA rows
+# Remove all NA rows, to make sure that the SEM is fitting the same dataset for each model
 spruce_log_scale_noNA <- na.omit(spruce_log_scale)
 
 #### Global structural equation modeling ####
@@ -371,7 +396,7 @@ spruce_psem <- psem(
 )
 
 summary(spruce_psem, .progressBar = FALSE)
-# This is the worst model we've fit yet by far (terrible AIC, bad R2s)
+# This is the worst model we've fit yet by far (bad R2s)
 
 ## What if we do one SEM per response variable to bring down the total number of relationships?
 
@@ -422,3 +447,6 @@ acn_psem <- psem(
   
 )
 summary(acn_psem, .progressBar = FALSE)
+
+#### Compare numeric vs categorical model fits ####
+
