@@ -19,7 +19,7 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem("Introduction",tabName="intro"),
       menuItem("Exploration",tabName="exploration"),
-      menuItem("Regression",tabName="regression"),
+      menuItem("Principal Component Analysis",tabName="PCA"),
       menuItem("SEM",tabName="sem")
     )
   ),
@@ -39,21 +39,23 @@ ui <- dashboardPage(
       ),
       #### Regression tab ####
       tabItem(
-        tabName = "regression",
+        tabName = "PCA",
         fluidRow(
           column(width=4,
                 box(width=NULL,
-                    title="PCA Select",
-                    checkboxGroupInput(inputId = "pca_incl_vars",
-                                       "Variables to include",
-                                       choices = c("Var1"="Var1","Var2"="Var2","Var3"="Var3"),
-                                       selected = "Var1"
-                          
+                    checkboxGroupInput(inputId = "selected",
+                                       "Explanatory Variables",
+                                       choices = c("Bacteria Copy Number"="Bacteria_copy_dry","Archaeal Copy Number"="Archaea_copy_dry","Gravimetric Water Content"="GWC", "Dissolved Nitrogen"="DN_unfumigated_soil", "Microbial Biomass Nitrogen"="MBN", "Dissolved Organic Carbon"="DOC_unfumigated_soil", "Microbial Biomass Carbon"="MBC", "Soil Temperature"="temp")
+                    )),
+                box(width=NULL,
+                    radioButtons(inputId = "selection",
+                                       "Colour By",
+                                       choices = c("Experimental Temperature"="Temp_experimental","CO2 Treatment"="CO2_treatment","Depth"="depth2")
+                                       
                     ))
                 ),
           column(width=8,
                  box(width=NULL,
-                     title="PCA",
                      plotOutput("pca_plot"))
                  )
         )
@@ -68,8 +70,10 @@ ui <- dashboardPage(
 )
 
 ###### Server ###### 
+
 server <- function(input, output){
-  output$pca_plot <- renderPlot(plot(1:10,1:10,ylab=input$pca_incl_vars[1]))
+  output$pca_plot <- renderPlot(autoplot(prcomp(d[,input$selected], scale = T), data = d, colour= input$selection) + theme_bw()
+)
 }
 
 shinyApp(ui = ui, server = server)
