@@ -181,6 +181,8 @@ spruce_log_scale[,to_transform] <- log(spruce[,to_transform])
 # Due to "heterogeneity between the two replicate samples" used to calculate MBN
 # and MBC, there are a few negative values that naturally become NAs when log-transformed.
 # Since negative values are nonsensical, having NAs for those values is desired behavior.
+# Another option would be to change these values to 0 or to a very small value,
+# to reflect that they have a very small microbial biomass.
 
 ### Scale all numerical values
 # Vector of numeric columns
@@ -222,30 +224,26 @@ summary(spruce_sem, standardize = T, rsq = T)
 #### Piecewise structural Equation Modeling ####
 library(piecewiseSEM)
 
-# piecewiseSEM maybe doesn't like the underscore?
-orig_colnames <- colnames(spruce_log_scale)
-colnames(spruce_log_scale) <- gsub("_","",colnames(spruce_log_scale))
-
 # Take the preferred models determined above, but use the outlier-removed
 # dataset for all so that they're all on the same dataset.
 # Package recommends removing all rows with NAs; consider doing this...
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOCunfumigatedsoil ~ depth2 + Tempexperimental + CO2treatment + GWC, data=spruce_log_scale, na.action=na.omit),
-  lm(DNunfumigatedsoil ~ depth2 + Tempexperimental + CO2treatment + GWC, data=spruce_log_scale, na.action=na.omit),
-  lm(temp ~ Tempexperimental + CO2treatment + depth2 + Sampledate,
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date,
      data=spruce_log_scale, na.action=na.omit),
-  lm(GWC ~ depth2 + temp + Sampledate, data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + PREC_6 + Sample_date, data=spruce_log_scale, na.action=na.omit),
   
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
-  lm(Bacteriacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + GWC + depth2 + Tempexperimental,
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
      data=spruce_log_scale, na.action=na.omit),
-  lm(Archaeacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + GWC + depth2 + Tempexperimental,
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
      data=spruce_log_scale, na.action=na.omit),
-  lm(MBN ~ DNunfumigatedsoil + temp + GWC + depth2 + Tempexperimental + Sampledate,
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental + Sample_date,
      data=spruce_log_scale, na.action=na.omit),
-  lm(MBC ~ DOCunfumigatedsoil + temp + GWC + depth2 + Tempexperimental + Sampledate,
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental + Sample_date,
      data=spruce_log_scale, na.action=na.omit)
   
 )
