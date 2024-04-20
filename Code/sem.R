@@ -178,8 +178,8 @@ to_scale <- unlist(lapply(spruce_log_scale, is.numeric), use.names = FALSE)
 # Double check these are only columns we want
 colnames(spruce_log_scale)[to_scale]
 
-# Make plot into a factor
-spruce_log_scale$Plot <- factor(spruce_log_scale$Plot)
+# Make plot into a character
+spruce_log_scale$Plot <- as.character(spruce_log_scale$Plot)
 
 # Redo the vector of numeric columns
 to_scale <- unlist(lapply(spruce_log_scale, is.numeric), use.names = FALSE)
@@ -211,26 +211,30 @@ summary(spruce_sem, standardize = T, rsq = T)
 #### Piecewise structural Equation Modeling ####
 library(piecewiseSEM)
 
+# piecewiseSEM maybe doesn't like the underscore?
+orig_colnames <- colnames(spruce_log_scale)
+colnames(spruce_log_scale) <- gsub("_","",colnames(spruce_log_scale))
+
 # Take the preferred models determined above, but use the outlier-removed
 # dataset for all so that they're all on the same dataset.
 # Package recommends removing all rows with NAs; consider doing this...
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOC_unfumigated_soil ~ depth2, data=spruce_log_scale, na.action=na.omit),
-  lm(DN_unfumigated_soil ~ depth2, data=spruce_log_scale, na.action=na.omit),
-  lm(temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date,
+  lm(DOCunfumigatedsoil ~ depth2, data=spruce_log_scale, na.action=na.omit),
+  lm(DNunfumigatedsoil ~ depth2, data=spruce_log_scale, na.action=na.omit),
+  lm(temp ~ Tempexperimental + CO2treatment + depth2 + Sampledate,
      data=spruce_log_scale, na.action=na.omit),
-  lm(GWC ~ depth2 + Sample_date, data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + Sampledate, data=spruce_log_scale, na.action=na.omit),
   
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
-  lm((Bacteria_copy_dry) ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp,
+  lm(Bacteriacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + depth2,
      data=spruce_log_scale, na.action=na.omit),
-  lm((Archaea_copy_dry) ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp,
+  lm(Archaeacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + depth2,
      data=spruce_log_scale, na.action=na.omit),
-  lm((MBN) ~ DN_unfumigated_soil + temp + GWC,
+  lm(MBN ~ DNunfumigatedsoil + temp + GWC + depth2,
      data=spruce_log_scale, na.action=na.omit),
-  lm((MBC) ~ DOC_unfumigated_soil + temp + GWC,
+  lm(MBC ~ DOCunfumigatedsoil + temp + GWC + depth2,
      data=spruce_log_scale, na.action=na.omit)
   
 )
