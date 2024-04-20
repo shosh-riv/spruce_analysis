@@ -1,0 +1,31 @@
+---
+title: "PCA Analysis"
+author: "Autumn Pereira"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Principal Component Analysis
+
+```{r}
+d <- read.csv()
+```
+
+Let's make a dataframe without our predictor variables (experimental temp & CO2 treatment) as well as other "identification-style" information.
+
+```{r}
+d2 <- d[, -c(1:7)]
+ident <- d[,c(2:7)]
+```
+
+```{r}
+selections <- c(8:15)
+identifier <- c("CO2_treatment")
+
+pca <- prcomp(d[,selections], scale = T)
+autoplot(pca, data = d, colour= identifier) + theme_bw()
+```
