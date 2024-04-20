@@ -171,7 +171,8 @@ plot(MBC_log_lm)
 #### Scale, log-transform data ####
 # Log-transform the variables that need log-transformation as determined above.
 # Also scale the entire dataset.
-
+spruce_no_out <- spruce
+spruce_no_out[139,"MBN"] <- NA
 spruce_log_scale <- spruce_no_out
 
 ### Log-transformation
@@ -200,6 +201,9 @@ colnames(spruce_log_scale)[to_scale]
 
 # Scale columns
 spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
+
+# Remove all NA rows
+spruce_log_scale_noNA <- na.omit(spruce_log_scale)
 
 #### Global structural equation modeling ####
 # Since regular linear models are suitable for everything, we can 
@@ -230,21 +234,21 @@ library(piecewiseSEM)
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
-  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale_noNA, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale_noNA, na.action=na.omit),
   lm(temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date,
-     data=spruce_log_scale, na.action=na.omit),
-  lm(GWC ~ depth2 + temp + PREC_6 + Sample_date, data=spruce_log_scale, na.action=na.omit),
+     data=spruce_log_scale_noNA, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + PREC_6 + Sample_date, data=spruce_log_scale_noNA, na.action=na.omit),
 
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
   lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_log_scale, na.action=na.omit),
+     data=spruce_log_scale_noNA, na.action=na.omit),
   lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_log_scale, na.action=na.omit),
+     data=spruce_log_scale_noNA, na.action=na.omit),
   lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental + Sample_date,
-     data=spruce_log_scale, na.action=na.omit),
+     data=spruce_log_scale_noNA, na.action=na.omit),
   lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental + Sample_date,
-     data=spruce_log_scale, na.action=na.omit)
+     data=spruce_log_scale_noNA, na.action=na.omit)
   
 )
 
@@ -253,42 +257,74 @@ summary(spruce_psem, .progressBar = FALSE)
 ## What happens if we make all variables numeric?
 
 #### Make categorical variables numeric ####
-
+spruce_num <- spruce_no_out
 ### Temperature treatment
-unique(spruce$Temp_experimental)
+unique(spruce_num$Temp_experimental)
 
 # 0 is the treatment that just had blowers with no heating, and "Amb" is the 
 # control treatment that had no blowers or temperature modification. To distinguish
 # between them, give Amb the value 0.01.
-spruce[which(spruce$Temp_experimental=="Amb"),"Temp_experimental"] <- 0.01
-spruce$Temp_experimental <- as.numeric(spruce$Temp_experimental)
+spruce_num[which(spruce_num$Temp_experimental=="Amb"),"Temp_experimental"] <- 0.01
+spruce_num$Temp_experimental <- as.numeric(spruce_num$Temp_experimental)
 
 ### CO2 treatment
-unique(spruce$CO2_treatment)
+unique(spruce_num$CO2_treatment)
 
 # A is ambient, and E is elevated 500 ppm above ambient. Change these to 0 and 500.
-spruce[which(spruce$CO2_treatment=="A"),"CO2_treatment"] <- 0
-spruce[which(spruce$CO2_treatment=="E"),"CO2_treatment"] <- 500
-spruce$CO2_treatment <- as.numeric(spruce$CO2_treatment)
+spruce_num[which(spruce_num$CO2_treatment=="A"),"CO2_treatment"] <- 0
+spruce_num[which(spruce_num$CO2_treatment=="E"),"CO2_treatment"] <- 500
+spruce_num$CO2_treatment <- as.numeric(spruce_num$CO2_treatment)
 
 ### Depth
-unique(spruce$depth2)
+unique(spruce_num$depth2)
 
 # They sampled from the top of each range, not throughout the whole range, so we can
 # take this as the smaller number for each range given.
-spruce$depth2 <- stringr::str_extract(spruce$depth2,"(\\d+)-",group=1)
-spruce$depth2 <- as.numeric(spruce$depth2)
+spruce_num$depth2 <- stringr::str_extract(spruce_num$depth2,"(\\d+)-",group=1)
+spruce_num$depth2 <- as.numeric(spruce_num$depth2)
 
 ### Date
-unique(spruce$Sample_date)
+unique(spruce_num$Sample_date)
 
 # We only have two sampling dates, so this makes sense to do as a binary.
 # 0 = 6/23/21, 1 = 8/24/21
-spruce[which(spruce$Sample_date=="2021-06-23"),"Sample_date"] <- 0
-spruce[which(spruce$Sample_date=="2021-08-24"),"Sample_date"] <- 1
-spruce$Sample_date <- as.numeric(spruce$Sample_date)
+spruce_num[which(spruce_num$Sample_date=="2021-06-23"),"Sample_date"] <- 0
+spruce_num[which(spruce_num$Sample_date=="2021-08-24"),"Sample_date"] <- 1
+spruce_num$Sample_date <- as.numeric(spruce_num$Sample_date)
 
-## Now go back up and log-transform and scale everything that needs it
+#### Log-transform and scale numeric data ####
+spruce_num_log_scale <- spruce_num
+
+### Log-transformation##spruce_num_log_scale# Log-transformation
+to_transform <- c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")
+spruce_num_log_scale[,to_transform] <- log(spruce_num_log_scale[,to_transform])
+
+# Due to "heterogeneity between the two replicate samples" used to calculate MBN
+# and MBC, there are a few negative values that naturally become NAs when log-transformed.
+# Since negative values are nonsensical, having NAs for those values is desired behavior.
+# Another option would be to change these values to 0 or to a very small value,
+# to reflect that they have a very small microbial biomass.
+
+### Scale all numerical values
+# Vector of numeric columns
+to_scale <- unlist(lapply(spruce_num_log_scale, is.numeric), use.names = FALSE)
+
+# Double check these are only columns we want
+colnames(spruce_num_log_scale)[to_scale]
+
+# Make plot into a character
+spruce_num_log_scale$Plot <- as.character(spruce_num_log_scale$Plot)
+
+# Redo the vector of numeric columns
+to_scale <- unlist(lapply(spruce_num_log_scale, is.numeric), use.names = FALSE)
+colnames(spruce_num_log_scale)[to_scale]
+
+# Scale columns
+spruce_num_log_scale[,to_scale] <- scale(spruce_num_log_scale[,to_scale])
+
+# Remove NA rows
+spruce_num_log_scale_noNA <- na.omit(spruce_num_log_scale)
+
 
 ## Model identification
 # Model still doesn't fit. Check the t-rule. It currently includes
@@ -336,3 +372,53 @@ spruce_psem <- psem(
 
 summary(spruce_psem, .progressBar = FALSE)
 # This is the worst model we've fit yet by far (terrible AIC, bad R2s)
+
+## What if we do one SEM per response variable to bring down the total number of relationships?
+
+# Bacteria copy number
+bcn_psem <- psem(
+  
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + CO2_treatment + depth2,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + PREC_6, data=spruce_log_scale, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+     data=spruce_log_scale, na.action=na.omit)#,
+  # lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+  #    data=spruce_log_scale, na.action=na.omit),
+  # lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2,
+  #    data=spruce_log_scale, na.action=na.omit),
+  # lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2,
+  #    data=spruce_log_scale, na.action=na.omit)
+  
+)
+
+summary(bcn_psem, .progressBar = FALSE)
+# Still not an identified model but WAY better than before
+
+# Archaea copy number
+acn_psem <- psem(
+  
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + CO2_treatment + GWC + temp, data=spruce_log_scale_noNA, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + CO2_treatment + GWC + temp, data=spruce_log_scale_noNA, na.action=na.omit),
+  lm(temp ~ Temp_experimental + CO2_treatment + depth2,
+     data=spruce_log_scale_noNA, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + PREC_6, data=spruce_log_scale_noNA, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  # lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+  #    data=spruce_log_scale_noNA, na.action=na.omit)#,
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental + CO2_treatment,
+     data=spruce_log_scale_noNA, na.action=na.omit)#,
+  # lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2,
+  #    data=spruce_log_scale_noNA, na.action=na.omit),
+  # lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2,
+  #    data=spruce_log_scale_noNA, na.action=na.omit)
+  
+)
+summary(acn_psem, .progressBar = FALSE)
