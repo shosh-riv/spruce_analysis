@@ -281,14 +281,9 @@ summary(spruce_psem, .progressBar = FALSE)
 ## What happens if we make all variables numeric?
 
 #### Make categorical variables numeric ####
-spruce_num <- spruce_no_out
+spruce_num <- spruce_noAmb
 ### Temperature treatment
 unique(spruce_num$Temp_experimental)
-
-# 0 is the treatment that just had blowers with no heating, and "Amb" is the 
-# control treatment that had no blowers or temperature modification. To distinguish
-# between them, give Amb the value 0.01.
-spruce_num[which(spruce_num$Temp_experimental=="Amb"),"Temp_experimental"] <- 0.01
 spruce_num$Temp_experimental <- as.numeric(spruce_num$Temp_experimental)
 
 ### CO2 treatment
