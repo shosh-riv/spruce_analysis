@@ -193,6 +193,20 @@ spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
 # use a global modeling approach.
 library(lavaan)
 
+sem_formula <- '
+  DOC_unfumigated_soil ~ depth2
+  DN_unfumigated_soil ~ depth2
+  temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date
+  GWC ~ depth2 + Sample_date
+  Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp
+  Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp
+  MBN ~ DN_unfumigated_soil + temp + GWC
+  MBC ~ DOC_unfumigated_soil + temp + GWC
+'
+
+spruce_sem <- sem(sem_formula, data = spruce_log_scale)
+
+summary(spruce_sem, standardize = T, rsq = T)
 
 #### Piecewise structural Equation Modeling ####
 library(piecewiseSEM)
