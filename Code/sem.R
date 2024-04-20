@@ -156,6 +156,44 @@ plot(MBC_log_lm)
 # Honestly not sure which is better! Maybe go with log-transformed for consistency. 
 # Ask for feedback.
 
+
+#### Scale, log-transform data ####
+# Log-transform the variables that need log-transformation as determined above.
+# Also scale the entire dataset.
+
+spruce_log_scale <- spruce_no_out
+
+### Log-transformation
+to_transform <- c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")
+spruce_log_scale[,to_transform] <- log(spruce[,to_transform])
+
+# Due to "heterogeneity between the two replicate samples" used to calculate MBN
+# and MBC, there are a few negative values that naturally become NAs when log-transformed.
+# Since negative values are nonsensical, having NAs for those values is desired behavior.
+
+### Scale all numerical values
+# Vector of numeric columns
+to_scale <- unlist(lapply(spruce_log_scale, is.numeric), use.names = FALSE)
+
+# Double check these are only columns we want
+colnames(spruce_log_scale)[to_scale]
+
+# Make plot into a factor
+spruce_log_scale$Plot <- factor(spruce_log_scale$Plot)
+
+# Redo the vector of numeric columns
+to_scale <- unlist(lapply(spruce_log_scale, is.numeric), use.names = FALSE)
+colnames(spruce_log_scale)[to_scale]
+
+# Scale columns
+spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
+
+#### Global structural equation modeling ####
+# Since regular linear models are suitable for everything, we can 
+# use a global modeling approach.
+library(lavaan)
+
+
 #### Piecewise structural Equation Modeling ####
 library(piecewiseSEM)
 
@@ -165,21 +203,21 @@ library(piecewiseSEM)
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOC_unfumigated_soil ~ depth2, data=spruce_no_out, na.action=na.omit),
-  lm(DN_unfumigated_soil ~ depth2, data=spruce_no_out, na.action=na.omit),
+  lm(DOC_unfumigated_soil ~ depth2, data=spruce_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2, data=spruce_log_scale, na.action=na.omit),
   lm(temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date,
-     data=spruce_no_out, na.action=na.omit),
-  lm(GWC ~ depth2 + Sample_date, data=spruce_no_out, na.action=na.omit),
+     data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + Sample_date, data=spruce_log_scale, na.action=na.omit),
   
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
-  lm(log(Bacteria_copy_dry) ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp,
-     data=spruce_no_out, na.action=na.omit),
-  lm(log(Archaea_copy_dry) ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp,
-     data=spruce_no_out, na.action=na.omit),
-  lm(log(MBN) ~ DN_unfumigated_soil + temp + GWC,
-     data=spruce_no_out, na.action=na.omit),
-  lm(log(MBC) ~ DOC_unfumigated_soil + temp + GWC,
-     data=spruce, na.action=na.omit)
+  lm((Bacteria_copy_dry) ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp,
+     data=spruce_log_scale, na.action=na.omit),
+  lm((Archaea_copy_dry) ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp,
+     data=spruce_log_scale, na.action=na.omit),
+  lm((MBN) ~ DN_unfumigated_soil + temp + GWC,
+     data=spruce_log_scale, na.action=na.omit),
+  lm((MBC) ~ DOC_unfumigated_soil + temp + GWC,
+     data=spruce_log_scale, na.action=na.omit)
   
 )
 
