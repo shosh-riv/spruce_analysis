@@ -8,6 +8,17 @@ str(spruce)
 # Expect measured temp to be influenced by temp_experimental, co2_treatment, sample_date
 # MBC, MBN influenced by bacteria/archae copy num, GWC
 
+### Add precipitation back into this dataframe
+env <- read.csv("./Data/Clean/dailymean_environmental_data_2021.csv")
+
+# Convert day of year to date
+env$Sample_date <- as.character(as.Date(env$Day_of_Year,origin="2020-12-31"))
+
+# Grab precip data
+spruce <- merge(spruce,env[,c("Sample_date","Plot","PREC_6")],
+                 by=c("Sample_date","Plot"),all.x=T,all.y=F)
+
+#### Covariance matrix ####
 # First, investigate correlations
 GGally::ggpairs(spruce[,c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")],
                 lower=list(continuous="smooth_lm"))
@@ -70,7 +81,7 @@ hist(log(spruce$temp))
 # Untransformed definitely better
 
 ## Gravimetric water content
-GWC_lm <- lm(GWC ~ depth2 + Sample_date, data=spruce, na.action=na.omit)
+GWC_lm <- lm(GWC ~ depth2 + PREC_6 + Sample_date, data=spruce, na.action=na.omit)
 par(mfrow=c(2,2))
 plot(GWC_lm)
 # Mostly fine but definitely a skew in the Q-Q plot
@@ -78,7 +89,7 @@ par(mfrow=c(1,2))
 hist(spruce$GWC)
 hist(log(spruce$GWC))
 # I'm not sure that log-transformming is the move here. Does it change the Q-Q plot?
-GWC_log_lm <- lm(log(GWC) ~ depth2 + Sample_date, data=spruce, na.action=na.omit)
+GWC_log_lm <- lm(log(GWC) ~ depth2 + PREC_6 + Sample_date, data=spruce, na.action=na.omit)
 par(mfrow=c(2,2))
 plot(GWC_log_lm)
 # It actually skews it worse. Stick to the untransformed data.
@@ -221,22 +232,34 @@ colnames(spruce_log_scale) <- gsub("_","",colnames(spruce_log_scale))
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOCunfumigatedsoil ~ depth2, data=spruce_log_scale, na.action=na.omit),
-  lm(DNunfumigatedsoil ~ depth2, data=spruce_log_scale, na.action=na.omit),
+  lm(DOCunfumigatedsoil ~ depth2 + Tempexperimental + CO2treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(DNunfumigatedsoil ~ depth2 + Tempexperimental + CO2treatment + GWC, data=spruce_log_scale, na.action=na.omit),
   lm(temp ~ Tempexperimental + CO2treatment + depth2 + Sampledate,
      data=spruce_log_scale, na.action=na.omit),
-  lm(GWC ~ depth2 + Sampledate, data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + Sampledate, data=spruce_log_scale, na.action=na.omit),
   
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
-  lm(Bacteriacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + depth2,
+  lm(Bacteriacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + GWC + depth2 + Tempexperimental,
      data=spruce_log_scale, na.action=na.omit),
-  lm(Archaeacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + depth2,
+  lm(Archaeacopydry ~ DOCunfumigatedsoil + DNunfumigatedsoil + temp + GWC + depth2 + Tempexperimental,
      data=spruce_log_scale, na.action=na.omit),
-  lm(MBN ~ DNunfumigatedsoil + temp + GWC + depth2,
+  lm(MBN ~ DNunfumigatedsoil + temp + GWC + depth2 + Tempexperimental + Sampledate,
      data=spruce_log_scale, na.action=na.omit),
-  lm(MBC ~ DOCunfumigatedsoil + temp + GWC + depth2,
+  lm(MBC ~ DOCunfumigatedsoil + temp + GWC + depth2 + Tempexperimental + Sampledate,
      data=spruce_log_scale, na.action=na.omit)
   
 )
 
 summary(spruce_psem, .progressBar = FALSE)
+
+# Doesn't fit. Check residuals.
+psem_resid <- residuals(spruce_psem)
+par(ask=T)
+
+for(i in colnames(psem_resid)){
+  plot(spruce_log_scale[,gsub("_residuals","",i)],psem_resid[,i],main=i)
+  
+}
+
+# DOC looks okay
+# DN is a little more distributed but still a definite relatioinship between residuals and
