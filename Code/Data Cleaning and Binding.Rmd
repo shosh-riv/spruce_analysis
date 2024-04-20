@@ -1,0 +1,409 @@
+---
+title: "Data Cleaning and Binding"
+author: "Autumn Pereira"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I will be combining the qPCR, porewater, and microbial biomass + dissolved organic carbon datasets, while Linnea will be cleaning the environmental datasets. We are doing this as well as any necessary datacleaning separately, and will bind all of the files together at the end.
+
+Let's start by loading our dataset and some useful packages
+
+```{r}
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gsubfn)
+
+qpcr <- read.csv("SPRUCE_qPCR_copy_numbers_2021.csv")
+chloroform <- read.csv("SPRUCE_CFE_MBC_MBN_2021_2022.csv")
+envr <- read.csv("dailymean_environmental_data_2021.csv")
+```
+
+## Pre-Processing
+
+There are a lot of variables in these dataframes...
+
+```{r}
+sum(length(colnames(chloroform)), length(colnames(qpcr)), length(colnames(envr)))
+```
+
+Over 100, at least! Let's start with formatting these dataframes to be in long form and making sure we are keeping only what we care about
+
+#### Environmental Data
+
+Let's take a look at what our colnames look like
+
+```{r}
+cols <- colnames(envr)
+
+cols[10:20]
+```
+
+Thesec correspond to the soil temperature at different layers. For instance, TS_.5__A2 is the soil temperature at 5 cm below the soil surface in Zone A, while TS_.100__A8 is the temperature at 100cm below the soil surface in Zone A
+
+A lot of the variables are of this type, reporting the soil temperature at different depths in different zones.
+
+Let's convert this table into long form using the pivot_longer() function
+
+```{r}
+envr <- pivot_longer(envr, cols= 6:96, names_to= "measure")
+```
+
+That looks better. Let's now make sure to only include soil temperature measurements. We will start by separating out the variable names to have 
+
+- a column of "measured" (the first two letters of the variable name, where TS= soil temp, RH= relative humidity, WS= wind speed, WD= wind direction)
+
+- a column of depth
+
+- a column of the "zone" it is in
+
+```{r}
+envr <- envr %>% mutate(var_measured = substr(measure, 1, 2))
+envr <- envr %>% mutate(SD= str_extract(envr$measure, "_SD"))
+
+envr <- subset(envr, var_measured == "TS")
+envr <- subset(envr, is.na(SD) ==T)
+envr <- envr[, -c(9)]
+
+envr <- envr %>% mutate(depth = str_extract(measure, "_.(\\d+)", group = 1))
+envr <- envr %>% mutate(zone = str_extract(envr$measure, "__([A-Z])", group = 1))
+```
+
+We have a few NAs in our dataset, which is from the measurements taken of the soil temperature at the hummock, which is a different microtopographical element of peatlands. We won't be using these datapoints, so we will remove these.
+
+```{r}
+envr <- na.omit(envr)
+```
+
+Great ! The last thing to do is change the depth variable to a numeric
+
+```{r}
+envr$depth <- as.numeric(envr$depth)
+```
+
+Finally, we will make a table to check for anything odd
+
+```{r}
+table(envr$depth)
+```
+
+So it seems that a few entries may be missing for the 100 and 200 depths. Another thing to note is that the soil temperature was never taken at 1 cm, but these entries instead correspond to 0 cm depth, which is fine.
+
+Let's table these by plot, so that we can see if there are certain plots missing the 100 and 200 cm depth data.
+
+```{r}
+table(envr$depth, envr$Plot)
+```
+Okay, so it seems that plots 4 and 21 are are the ones with variation in 100 and 200 cm depths compared to others. interestingly, we also see that plot 10 has less observations than the others. However, our other data was only taken on two different dates. So as long as we have records for those dates, that should be fine.
+
+Those dates are 2021-06-23 and 2021-08-24. However, the dates in the environmental dataset are given as date of the year. 
+
+2021-06-23 is the 174th day of the year, and 2021-08-24 is the 236th day of the year. 
+
+```{r}
+envr <- subset(envr, Day_of_Year == 174 | Day_of_Year == 236)
+```
+
+Let's table by depth and plot. We should have 2 measurements, one for each day
+
+```{r}
+table(envr$depth, envr$Plot)
+```
+Ah, okay. There seems to be an effect of the "zone" variable- one measurement was recorded for each "zone" (corresponds to a different point on the temperature sensor). We will take measurements from zone A, as this is the "center" position of the soil probe.
+
+```{r}
+envr <- subset(envr, zone == "A")
+table(envr$depth, envr$Plot)
+```
+Great. That should suffice for now. 
+
+#### qPCR Dataset
+
+```{r}
+colnames(qpcr)
+```
+We really only care about the copies per gram dry weight. This corresponds to Bacteria_copy_dry and Archaea_copy_dry. Let's keep only these, and the details of the sampling location/date
+
+```{r}
+qpcr <- qpcr[,-c(13,15,16,17)]
+```
+
+Lastly, we will make a histogram of the Archaea_copy_dry and Bacteria_copy_dry to ensure we don't have outliers
+
+```{r}
+par(mfrow= c(1,2))
+hist(qpcr$Archaea_copy_dry)
+hist(qpcr$Bacteria_copy_dry)
+```
+
+These both seem okay, except for that there are two entries with the value at -9999, which is used in this dataset to represent an NA or some sort of error. Let's remove these entries
+
+```{r}
+qpcr <- subset(qpcr, Archaea_copy_dry >= 0 & Bacteria_copy_dry >= 0)
+```
+
+
+#### Chloroform Dataset
+
+```{r}
+colnames(chloroform)
+```
+
+Here, we really only care about
+
+- DN_unfumigated_soil (this is a measure of total N without the N stored in microbial biomass)
+- MBN (microbial biomass nitrogen)
+- DOC_unfumigated_soil (this is a measure of total DOC without the OC stored in microbial biomass)
+- GWC: a measure of soil moisture
+
+Let's remove the other variables (except those describing the sampling location and time) from this dataset
+
+```{r}
+chloroform <- chloroform[, -c(5:8,10:12,14,16,17,19)]
+```
+
+## Merging Dataframes
+
+### Formatting the envr dataset
+
+Merging the chloroform and qpcr dataframes won't be a big hassle, we just need to make sure that we are combining entries that have both the same date, plot, and depth. However, we have a bit more processing to do for the envr dataset, namely changing the dates and depths
+
+Let's start by changing the dates to the same format as the qpcr dataset. Recall that 2021-06-23 is the 174th day of the year, and 2021-08-24 is the 236th day of the year.
+
+```{r}
+envr$date <- NA
+
+for (i in 1:216){
+  if (envr$Day_of_Year[i] == 174){
+    envr$date[i] <- "2021-06-23"
+  }
+  else{
+    envr$date[i] <- "2021-08-24"
+  }
+}
+```
+
+Let's make a variable combining date and site
+
+```{r}
+envr$datesite <- paste(envr$date, envr$Plot)
+```
+
+Cool. Now to work on the depth
+
+Note that we have the following depth ranges for where qPCR and chloroform samples were taken
+
+```{r}
+unique(qpcr$Depth_range)
+```
+
+and temperature readings from these depths
+
+```{r}
+unique(envr$depth)
+```
+
+We don't have a one-to-one mapping between depth range of qpcr/chloroform measurements and the depth measurements. 
+
+There are three options I can take
+
+1. Average all of the temperatures, in order to get an estimate of the temperature at the midpoint (ex: average the measurements at 10 and 20 cm and report that as the value for the 10-20cm range): this could work, but there are a few issues, namely the 50-75, 75-100, 100-125, and 150-175 variables. 
+
+2. Assign the temperature at the top layer for all layers: Similarly to the previous method, the 75-100, and 150-175 variables wouldn't have a value. I feel like we've already cut a lot of data, and I'm not sure if I'm happy cutting more.
+
+3. A combination of 1 and 2: for the ranges where I can take the top layer measurement, I will use that, and for ranges where I cannot, I can take the average: this shoiuld work well, since I can assign:
+
+50-75: measurement at 50 cm
+
+75-100: average of 50cm and 100cm measurements
+
+100-125: measurement at 100cm
+
+150-175: average of 100cm and 200cm measurements.
+
+We can test the validity of this by taking the average of the measurements at 0 and 10 cm, and comparing those to the actual values taken at 5 cm.
+
+```{r}
+envr_ranges <- matrix(ncol = 3, nrow = 0)
+colnames(envr_ranges) <- c("datesite", "depth range", "temp")
+date_site_combos <- unique(envr$datesite)
+
+envr_0_10 <- subset(envr, depth == 1 | depth == 10)
+
+for (i in 1:24){
+  sub <- subset(envr_0_10, datesite == date_site_combos[i])
+  envr_ranges <- rbind(envr_ranges, c(date_site_combos[i], "0-10", mean(sub$value)))
+}
+
+envr_ranges<- as.data.frame(envr_ranges)
+```
+
+```{r}
+depth5 <- subset(envr, depth == 5)
+
+comparison <- inner_join(depth5, envr_ranges, by = "datesite")
+```
+
+```{r}
+plot(comparison$value, comparison$temp)
+
+summary(lm(comparison$temp~comparison$value))
+```
+
+I think that this is okay. We don't have a 1-to-1 relationship, but this is the best way to keep all our data while making the best guess we can make.
+
+Let's do this for the two depths that need it:
+
+```{r}
+envr_ranges <- matrix(ncol = 3, nrow = 0)
+colnames(envr_ranges) <- c("datesite", "depth", "temp")
+date_site_combos <- unique(envr$datesite)
+
+envr_50_100 <- subset(envr, depth == 50 | depth == 100)
+envr_100_200 <- subset(envr, depth == 100 | depth == 200)
+
+for (i in 1:24){
+  sub1 <- subset(envr_50_100, datesite == date_site_combos[i])
+  envr_ranges <- rbind(envr_ranges, c(date_site_combos[i], "75-100", mean(sub1$value)))
+  
+  sub2 <- subset(envr_100_200, datesite == date_site_combos[i])
+    envr_ranges <- rbind(envr_ranges, c(date_site_combos[i], "150-175", mean(sub2$value)))
+}
+
+envr_ranges<- as.data.frame(envr_ranges)
+```
+
+Cool. Lastly, we will add datesite data for other depths into the envr_ranges dataset to get something we can easily combine with the qPCR + chloroform datasets
+
+```{r}
+small_envr <- envr[,c(12, 9,7)]
+
+colnames(small_envr) <- c()
+```
+
+
+Let's make a variable that combines the date and plot number.
+
+```{r}
+chloroform$datesite <- paste(chloroform$Sample_date, chloroform$Plot)
+qpcr$datesite <- paste(qpcr$Sample_date, qpcr$Plot)
+```
+
+Now let's see what data overlaps between these datasets
+
+```{r}
+length(intersect(chloroform$datesite, qpcr$datesite))
+length(unique(qpcr$datesite))
+```
+
+Okay, so it seems that we are losing ~12 samples by including qPCR results. However, we are including the most data that we can, since that is equal to the entire qPCR dataset.
+
+Let's now make a variable that includes depth, site, and date. 
+
+If we take a look at our depth variables, we can see that it while in the chloroform dataset it gives different ranges with a dash separating the top and bottom of the soil layer (in cm) (ex: 0-10, 10-20) in the qpcr dataset, it gives the same range with an underscore (ex: 0_10, 10_20). Let's change this so that they match.
+
+```{r}
+qpcr$depth2 <- NA
+
+for (i in 1:214){
+  split <- str_split(qpcr$Depth_range[i],"_")
+  qpcr$depth2[i] <- paste0(split[[1]][1], "-", split[[1]][2])
+}
+```
+
+Now, let's make a variable that includes date, site, and depth to make merging these dataframes easier.
+
+```{r}
+chloroform$datesitedepth <- paste(chloroform$datesite, chloroform$Depth)
+qpcr$datesitedepth <- paste(qpcr$datesite, qpcr$depth2)
+```
+
+Again, we will check the data loss
+
+```{r}
+length(intersect(chloroform$datesitedepth, qpcr$datesitedepth))
+```
+
+This corresponds to the entire qpcr dataset, so we are losing the least data possible with the datasets we have.
+
+## Dealing with Replicates
+
+Our last issue is that we have replicates in the chloroform and moisture datasets, but not the qpcr datasets. Let's average these to get a single datapoint for each date, site, and depth
+
+```{r}
+# i know there is probably a better way to do this but since we have only a few 
+# entries i will do it in a computation-intensive way since it is more 
+#straightforward
+temp <- unique(chloroform$datesitedepth)
+
+chloroform_means <- matrix(ncol = 6, nrow = length(temp))
+colnames(chloroform_means) <- c(colnames(chloroform)[5:9], "datesitedepth")
+
+for (i in 1:length(temp)){
+  sub <- subset(chloroform, datesitedepth == temp[i])
+  means <- colMeans(sub[, 5:9])
+  chloroform_means[i,6] <- temp[i]
+  for (j in 1:5){
+    chloroform_means[i,j] <- means[j]
+  }
+}
+```
+
+## Merging Chloroform and qPCR Datasets
+
+Finally, we will merge these datasets using inner_join() in the dplyr package. We will merge by our newly created "datesitedepth" variable.
+
+Let's first convert our chloroform matrix to a dataframe
+```{r}
+chloroform_means_2 <- as.data.frame(chloroform_means)
+```
+
+and combine!
+
+```{r}
+data <- inner_join(qpcr, chloroform_means_2, by = "datesitedepth")
+```
+
+Great! Now we have two of our datasets combined.
+
+
+
+# Data Processing
+
+It is important to note that some of our measurements are redundant, i.e. that they can be calculated from other measurements presented here.
+
+### Chloroform Dataset
+
+The important variables here are:
+
+- GWC: gravimetric water content
+
+- DN_unfumigated_soil: Dissolved Nitrogen of the soil
+- MBN: Microbial biomass nitrogen
+
+- DOC_unfumigated_soil: Dissolved organic carbon in the soil
+- MBC: Microbial biomass carbon
+
+Note importantly that these values will likely be correlated, since MBC is a part of the DOC pool (and similarly for MBN).
+
+### qPCR Dataset
+
+A lot of our important variables from this dataset of type "character". 
+
+```{r}
+data$MBC <- as.numeric(data$MBC)
+data$MBN <- as.numeric(data$MBN)
+data$GWC <- as.numeric(data$GWC)
+data$DOC_unfumigated_soil <- as.numeric(data$DOC_unfumigated_soil)
+data$DN_unfumigated_soil <- as.numeric(data$DN_unfumigated_soil)
+```
+
+
+
+
