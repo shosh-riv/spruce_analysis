@@ -1,7 +1,7 @@
 ### SEM for all SPRUCE variables ###
 
-spruce <- read.csv("./Data/Clean/complete_combined_spruce_data.csv")
-str(spruce)
+spruce_orig <- read.csv("./Data/Clean/complete_combined_spruce_data.csv")
+str(spruce_orig)
 
 # Expect bacteria and archaea copy num to be influenced by measured temp, depth,
 # DOC, DN, gravimetric water content GWC
@@ -15,7 +15,7 @@ env <- read.csv("./Data/Clean/dailymean_environmental_data_2021.csv")
 env$Sample_date <- as.character(as.Date(env$Day_of_Year,origin="2020-12-31"))
 
 # Grab precip data
-spruce <- merge(spruce,env[,c("Sample_date","Plot","PREC_6")],
+spruce <- merge(spruce_orig,env[,c("Sample_date","Plot","PREC_6")],
                  by=c("Sample_date","Plot"),all.x=T,all.y=F)
 
 #### Covariance matrix ####
@@ -235,7 +235,7 @@ spruce_psem <- psem(
   lm(temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date,
      data=spruce_log_scale, na.action=na.omit),
   lm(GWC ~ depth2 + temp + PREC_6 + Sample_date, data=spruce_log_scale, na.action=na.omit),
-  
+
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
   lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
      data=spruce_log_scale, na.action=na.omit),
@@ -250,14 +250,89 @@ spruce_psem <- psem(
 
 summary(spruce_psem, .progressBar = FALSE)
 
-# Doesn't fit. Check residuals.
-psem_resid <- residuals(spruce_psem)
-par(ask=T)
+## What happens if we make all variables numeric?
 
-for(i in colnames(psem_resid)){
-  plot(spruce_log_scale[,gsub("_residuals","",i)],psem_resid[,i],main=i)
+#### Make categorical variables numeric ####
+
+### Temperature treatment
+unique(spruce$Temp_experimental)
+
+# 0 is the treatment that just had blowers with no heating, and "Amb" is the 
+# control treatment that had no blowers or temperature modification. To distinguish
+# between them, give Amb the value 0.01.
+spruce[which(spruce$Temp_experimental=="Amb"),"Temp_experimental"] <- 0.01
+spruce$Temp_experimental <- as.numeric(spruce$Temp_experimental)
+
+### CO2 treatment
+unique(spruce$CO2_treatment)
+
+# A is ambient, and E is elevated 500 ppm above ambient. Change these to 0 and 500.
+spruce[which(spruce$CO2_treatment=="A"),"CO2_treatment"] <- 0
+spruce[which(spruce$CO2_treatment=="E"),"CO2_treatment"] <- 500
+spruce$CO2_treatment <- as.numeric(spruce$CO2_treatment)
+
+### Depth
+unique(spruce$depth2)
+
+# They sampled from the top of each range, not throughout the whole range, so we can
+# take this as the smaller number for each range given.
+spruce$depth2 <- stringr::str_extract(spruce$depth2,"(\\d+)-",group=1)
+spruce$depth2 <- as.numeric(spruce$depth2)
+
+### Date
+unique(spruce$Sample_date)
+
+# We only have two sampling dates, so this makes sense to do as a binary.
+# 0 = 6/23/21, 1 = 8/24/21
+spruce[which(spruce$Sample_date=="2021-06-23"),"Sample_date"] <- 0
+spruce[which(spruce$Sample_date=="2021-08-24"),"Sample_date"] <- 1
+spruce$Sample_date <- as.numeric(spruce$Sample_date)
+
+## Now go back up and log-transform and scale everything that needs it
+
+## Model identification
+# Model still doesn't fit. Check the t-rule. It currently includes
+# 13 variables; according to the t-rule, t <= [n(n+1)]/2, where n is the number
+# of unique cells in the variance-covariance matrix (the diagonal and the lower
+# off-diagonal; see: https://jslefche.github.io/sem_book/global-estimation.html#model-identifiability)
+# With 13 variables, n=91. 
+(91*(91+1))/2
+
+# We have 51 relationships and 13 parameters to estimate, so t = 51+13 = 64. This
+# is valid, assuming I'm using the t-rule right. We move on to checking sample size.
+
+# "The basic rule-of-thumb is that the level of replication should be at least 5 times the 
+# number of estimated coefficients (not error variances or other correlations). So in our 
+# previous path model, we are estimating two relationships, so we require at least n=10 to
+# fit that model. However, this value is a lower limit: ideally, replication is 5-20x 
+# the number of estimated parameters. "
+# We're estimating 51 relationships with our current model structure.
+51*5
+# This is 255, which is a few more than our 214 samples.
+214/5
+# At the most, we can include 42 relationships; ideally, we include fewer than this.
+
+## Try fitting a new model
+spruce_psem <- psem(
   
-}
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + CO2_treatment + depth2,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + PREC_6, data=spruce_log_scale, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2,
+     data=spruce_log_scale, na.action=na.omit)
+  
+)
 
-# DOC looks okay
-# DN is a little more distributed but still a definite relatioinship between residuals and
+summary(spruce_psem, .progressBar = FALSE)
+# This is the worst model we've fit yet by far (terrible AIC, bad R2s)
