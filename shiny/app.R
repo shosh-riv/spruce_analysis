@@ -98,8 +98,23 @@ ui <- dashboardPage(
 ###### Server ###### 
 
 server <- function(input, output){
-  output$pca_plot <- renderPlot(autoplot(prcomp(d[,input$selected], scale = T), data = d, colour= input$selection) + theme_bw())
-  output$explore_plot <- renderPlot(ggplot(data=d, aes_string(x=input$x_choice, y=input$y_choice, fill = input$colour_choice))+ geom_boxplot()+theme_bw())
+  #### PCA plot ####
+  output$pca_plot <- renderPlot({
+    autoplot(prcomp(d[,input$selected], scale = T), 
+             data = d, 
+             colour= input$selection) + 
+      theme_bw()
+    })
+  
+  #### ANOVAs ####
+  
+  
+  #### Boxplots ####
+  output$explore_plot <- renderPlot({
+    ggplot(data=d, aes_string(x=input$x_choice, y=input$y_choice, fill = input$colour_choice))+
+      geom_boxplot()+
+      theme_bw()
+    })
 }
 
 shinyApp(ui = ui, server = server)
