@@ -385,13 +385,14 @@ AIC_psem(spruce_num_psem)
 
 ## Model identification
 # Model still doesn't fit. Check the t-rule. The model currently includes
-# 13 variables; according to the t-rule, t <= [n(n+1)]/2, where n is the number
+# 12 variables; according to the t-rule, t <= [n(n+1)]/2, where n is the number
 # of unique cells in the variance-covariance matrix (the diagonal and the lower
 # off-diagonal; see: https://jslefche.github.io/sem_book/global-estimation.html#model-identifiability)
-# With 13 variables, n=91. 
-(91*(91+1))/2
+# With 12 variables, n=78. 
+sum(1:12)
+(78*(78+1))/2
 
-# We have 34 relationships and 13 parameters to estimate, so t = 51+13 = 64. This
+# We have 34 relationships and 12 parameters to estimate, so t = 34+12 = 46. This
 # is valid, assuming I'm using the t-rule right. We move on to checking sample size.
 
 # "The basic rule-of-thumb is that the level of replication should be at least 5 times the 
@@ -399,9 +400,9 @@ AIC_psem(spruce_num_psem)
 # previous path model, we are estimating two relationships, so we require at least n=10 to
 # fit that model. However, this value is a lower limit: ideally, replication is 5-20x 
 # the number of estimated parameters. "
-# We're estimating 51 relationships with our current model structure.
-51*5
-# This is 255, which is more than our 177 samples.
+# We're estimating 34 relationships with our current model structure.
+34*5
+# This is 170, which is fewer than our 177 samples.
 177/5
 # At the most, we can include 35 relationships; ideally, we include fewer than this.
 
