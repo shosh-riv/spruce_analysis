@@ -8,6 +8,10 @@ library(shinydashboard)
 library(ggplot2)
 library(ggfortify)
 library(plotly)
+library(multcompView)
+
+# Read in data (note: once dataset finalized, move to shiny folder)
+d <- read.csv("../Data/Clean/complete_combined_spruce_data.csv")
 
 ui <- dashboardPage(
   title = "SPRUCE",
@@ -59,6 +63,11 @@ ui <- dashboardPage(
         ),
         column(width=8,
                box(width=NULL,
+                   tableOutput("interaction_table"),
+                   #tableOutput("test_xletters"),
+                   #textOutput("test_forlegend") # for testing
+               ),
+               box(width=NULL,
                    plotOutput("explore_plot"))
         ))
       ),
@@ -108,11 +117,77 @@ server <- function(input, output){
   
   #### ANOVAs ####
   
+  # Select dependent variable for ANOVA
+  lhs <- reactive(input$y_choice)
+  
+  # Select explantory variable(s)
+  x_axis <- reactive(input$x_choice)
+  fill_var <- reactive(input$colour_choice)
+  
+  # Create formula
+  aov_formula <- reactive(paste0(lhs(),"~",paste(x_axis(),fill_var(),sep ="*")))
+  
+  # Run ANOVA
+  aov_object <- reactive(aov(formula(aov_formula()), data=d))
+  
+  # Run TukeyHSD
+  tukey <- reactive(TukeyHSD(aov_object()))
+  
+  # Extract p values
+  tukey_p <- reactive({
+      lapply(tukey(),FUN=function(x){
+      y <- x[,4]
+      names(y) <- rownames(x)
+      return(y)
+    })
+  })
+  
+  # Get letters for plotting
+  int <- reactive({
+    if(!is.null(tukey()[[3]])){
+      # If the interaction was included in the model, check if there were any significant interactions
+      # Which interactions were significant?
+      which(tukey_p()[[2]]<0.05) # change 2 back to 3!
+    }
+  })
+  
+  # If there were any significant interactions, print them as a table
+  interaction_table <- reactive({
+    if(length(int()) > 0){
+      temp <- tukey()[[2]][int,] # change 2 back to 3!
+      colnames(temp) <- c("Comparison","Difference","Lower","Upper","Adjusted p-value")
+    }
+    return(temp)
+  })
+  
+  # Return table
+  output$interaction_table <- renderTable(interaction_table())
+  
+  # Get letters for boxplot
+  x_letters <- reactive({
+    temp <- multcompLetters(tukey_p()[[x_axis()]])$Letters
+    temp <- data.frame(level = names(temp),letter = temp)
+    return(temp)
+  })
+  
+  fill_letters <- reactive(multcompLetters(tukey_p()[[fill_var()]])$Letters)
+  
+  for_legend <- reactive({
+    temp <- paste(names(fill_letters())," (",fill_letters(),")",sep="")
+    names(temp) <- names(fill_letters())
+    return(temp)
+  })
+  
+  # test output
+  # output$test_xletters <- renderTable(x_letters())
+  # output$test_forlegend <- renderText(for_legend())
   
   #### Boxplots ####
   output$explore_plot <- renderPlot({
     ggplot(data=d, aes_string(x=input$x_choice, y=input$y_choice, fill = input$colour_choice))+
       geom_boxplot()+
+      geom_text(data=x_letters(),aes(x=level,y=(max(d[[lhs()]])+max(d[[lhs()]])/10)),label=x_letters()$letter)+
+      scale_fill_discrete(labels=for_legend())
       theme_bw()
     })
 }
