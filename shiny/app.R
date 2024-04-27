@@ -12,6 +12,8 @@ library(multcompView)
 
 # Read in data (note: once dataset finalized, move to shiny folder)
 d <- read.csv("../Data/Clean/complete_combined_spruce_data.csv")
+# Replace dash with underscore in depth ranges so the names don't confuse the modeling
+d$depth2 <- gsub("-","_",d$depth2)
 
 ui <- dashboardPage(
   title = "SPRUCE",
@@ -64,8 +66,10 @@ ui <- dashboardPage(
         column(width=8,
                box(width=NULL,
                    tableOutput("interaction_table"),
-                   #tableOutput("test_xletters"),
-                   #textOutput("test_forlegend") # for testing
+                   tableOutput("test_xletters"), # this and below: for testing
+                   tableOutput("test_forlegend"),
+                   verbatimTextOutput("tukey_test"),
+                   tableOutput("tukeyp_test") 
                ),
                box(width=NULL,
                    plotOutput("explore_plot"))
@@ -144,52 +148,110 @@ server <- function(input, output){
   
   # Get letters for plotting
   int <- reactive({
-    if(!is.null(tukey()[[3]])){
+    int_exists <- tryCatch(expr = (length(tukey()[[3]]) > -1), error = function(e){
+      return(F)
+    }
+    )
+    if(int_exists){
       # If the interaction was included in the model, check if there were any significant interactions
       # Which interactions were significant?
-      which(tukey_p()[[2]]<0.05) # change 2 back to 3!
+      which(tukey_p()[[3]]<0.05)
+    } else{
+      0
     }
   })
   
   # If there were any significant interactions, print them as a table
   interaction_table <- reactive({
-    if(length(int()) > 0){
-      temp <- tukey()[[2]][int,] # change 2 back to 3!
-      colnames(temp) <- c("Comparison","Difference","Lower","Upper","Adjusted p-value")
+    if(any(int() != 0)){
+      # If you only have one interaction, it won't format it as a dataframe - deal with this case specially
+      if(length(int())==1){
+        temp_inttable <- t(as.data.frame(tukey()[[3]][int(),]))
+        rownames(temp_inttable) <- rownames(tukey()[[3]])[int()]
+      } else{
+        temp_inttable <- tukey()[[3]][int(),]
+      }
+      colnames(temp_inttable) <- c("Difference","Lower","Upper","Adjusted p-value")
+    } else{
+      temp_inttable <- "No interaction effects"
     }
-    return(temp)
+    return(temp_inttable)
   })
   
   # Return table
-  output$interaction_table <- renderTable(interaction_table())
+  output$interaction_table <- renderTable(interaction_table(),rownames = T)
   
   # Get letters for boxplot
   x_letters <- reactive({
-    temp <- multcompLetters(tukey_p()[[x_axis()]])$Letters
-    temp <- data.frame(level = names(temp),letter = temp)
-    return(temp)
+    temp_xletters <- multcompLetters(tukey_p()[[x_axis()]])$Letters
+    temp_xletters <- data.frame(level = names(temp_xletters),letter = temp_xletters)
+    return(temp_xletters)
   })
   
   fill_letters <- reactive(multcompLetters(tukey_p()[[fill_var()]])$Letters)
   
   for_legend <- reactive({
-    temp <- paste(names(fill_letters())," (",fill_letters(),")",sep="")
-    names(temp) <- names(fill_letters())
-    return(temp)
+    temp_legend <- paste(names(fill_letters())," (",fill_letters(),")",sep="")
+    names(temp_legend) <- names(fill_letters())
+    return(temp_legend)
   })
   
   # test output
-  # output$test_xletters <- renderTable(x_letters())
-  # output$test_forlegend <- renderText(for_legend())
+ #  output$test_xletters <- renderTable(x_letters())
+ #  output$test_forlegend <- renderTable(for_legend())
+ #  output$tukey_test <- renderText(int())
+ #  output$tukey_test <- renderPrint({    # Lettering DF
+ #    x_let <- x_letters()
+ #    for_x <- input$x_choice
+ #    
+ #    # Merge label with full dataframe
+ #    forplot <- merge(d,x_let,by.x=for_x,by.y=colnames(x_let)[2])
+ #    
+ #    return(colnames(forplot))})
+ #  output$tukeyp_test <- renderTable(tukey()[[3]])
+ #  output$tukeyp_test <- renderTable({
+ #    # Lettering DF
+ #    x_let <- x_letters()
+ #    for_x <- input$x_choice
+ #    
+ #    # Merge label with full dataframe
+ #    forplot <- merge(d,x_let,by.x=for_x,by.y="level")
+ #    
+ #    return(head(forplot[,10:ncol(forplot)]))
+ #  })
   
   #### Boxplots ####
-  output$explore_plot <- renderPlot({
-    ggplot(data=d, aes_string(x=input$x_choice, y=input$y_choice, fill = input$colour_choice))+
+
+  
+  ## Make plot
+  exploratory_plot <- reactive({
+    # Get y-coordinate of letters
+    letter_y <- max(d[[lhs()]])+max(d[[lhs()]])/10
+    
+    # Lettering DF
+    x_let <- x_letters()
+    
+    # Get choices
+    for_x <- input$x_choice
+    for_y <- input$y_choice
+    for_fill <- input$colour_choice
+    for_letter <- "letter"
+    
+    # Merge label with full dataframe
+    forplot <- merge(d,x_let,by.x=for_x,by.y="level")
+    
+    # Make plot
+    p <- ggplot(data=forplot, aes_string(x=for_x, y=for_y, fill = for_fill))+
       geom_boxplot()+
-      geom_text(data=x_letters(),aes(x=level,y=(max(d[[lhs()]])+max(d[[lhs()]])/10)),label=x_letters()$letter)+
-      scale_fill_discrete(labels=for_legend())
+      geom_text(aes_string(x=for_x,y=letter_y,label=for_letter))+
+      scale_fill_discrete(labels=for_legend())+
       theme_bw()
-    })
+
+    return(p)
+  })
+  
+  ## Show plot
+  output$explore_plot <- renderPlot(exploratory_plot())
 }
 
 shinyApp(ui = ui, server = server)
