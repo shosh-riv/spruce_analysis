@@ -5,15 +5,16 @@
 #####################################
 library(shiny)
 library(shinydashboard)
+library(shinyWidgets)
 library(ggplot2)
 library(ggfortify)
 library(plotly)
 library(multcompView)
 
 # Read in data (note: once dataset finalized, move to shiny folder)
-d <- read.csv("../Data/Clean/complete_combined_spruce_data.csv")
+d_orig <- read.csv("../Data/Clean/complete_combined_spruce_data.csv")
 # Replace dash with underscore in depth ranges so the names don't confuse the modeling
-d$depth2 <- gsub("-","_",d$depth2)
+d_orig$depth2 <- gsub("-","_",d_orig$depth2)
 
 ui <- dashboardPage(
   title = "SPRUCE",
@@ -61,10 +62,15 @@ ui <- dashboardPage(
                                          "Colour By",
                                          choices = c("Experimental Temperature"="Temp_experimental","CO2 Treatment"="CO2_treatment","Depth"="depth2")
                                          
-                            ))
+                            )),
+                        box(width=NULL,
+                             materialSwitch(inputId = "include_ambient",
+                                            label = "Include ambient temperature treatment?")
+                            )
         ),
         column(width=8,
                box(width=NULL,
+                   title = "Interactions",
                    tableOutput("interaction_table"),
                    tableOutput("test_xletters"), # this and below: for testing
                    tableOutput("test_forlegend"),
@@ -121,6 +127,15 @@ server <- function(input, output){
   
   #### ANOVAs ####
   
+  # Get data with or without ambient temperature
+  d <- reactive({
+    if(input$include_ambient){
+      d_orig
+    } else{
+      subset(d_orig,Temp_experimental != "Amb")
+    }
+  })
+  
   # Select dependent variable for ANOVA
   lhs <- reactive(input$y_choice)
   
@@ -132,7 +147,7 @@ server <- function(input, output){
   aov_formula <- reactive(paste0(lhs(),"~",paste(x_axis(),fill_var(),sep ="*")))
   
   # Run ANOVA
-  aov_object <- reactive(aov(formula(aov_formula()), data=d))
+  aov_object <- reactive(aov(formula(aov_formula()), data=d()))
   
   # Run TukeyHSD
   tukey <- reactive(TukeyHSD(aov_object()))
@@ -226,7 +241,7 @@ server <- function(input, output){
   ## Make plot
   exploratory_plot <- reactive({
     # Get y-coordinate of letters
-    letter_y <- max(d[[lhs()]])+max(d[[lhs()]])/10
+    letter_y <- max(d()[[lhs()]])+max(d()[[lhs()]])/10
     
     # Lettering DF
     x_let <- x_letters()
@@ -238,7 +253,7 @@ server <- function(input, output){
     for_letter <- "letter"
     
     # Merge label with full dataframe
-    forplot <- merge(d,x_let,by.x=for_x,by.y="level")
+    forplot <- merge(d(),x_let,by.x=for_x,by.y="level")
     
     # Make plot
     p <- ggplot(data=forplot, aes_string(x=for_x, y=for_y, fill = for_fill))+
