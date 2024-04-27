@@ -66,7 +66,11 @@ ui <- dashboardPage(
                         box(width=NULL,
                              materialSwitch(inputId = "include_ambient",
                                             label = "Include ambient temperature treatment?")
-                            )
+                            ),
+                        box(width=NULL,
+                            materialSwitch(inputId = "log_transform_anova",
+                                           label = "Log-transform response variable?")
+                        )
         ),
         column(width=8,
                box(width=NULL,
@@ -128,7 +132,7 @@ server <- function(input, output){
   #### ANOVAs ####
   
   # Get data with or without ambient temperature
-  d <- reactive({
+  d_amb <- reactive({
     if(input$include_ambient){
       d_orig
     } else{
@@ -136,8 +140,23 @@ server <- function(input, output){
     }
   })
   
+
+  
   # Select dependent variable for ANOVA
   lhs <- reactive(input$y_choice)
+  
+  # Log-transform if requested
+  d <- reactive({
+    dl <- d_amb()
+    if(input$log_transform_anova){
+      # If it includes 0, add 1
+      if(any(dl[,lhs()]==0)){
+        dl[,lhs()] <- dl[,lhs()] + 1
+      }
+      dl[,lhs()] <- log(dl[,lhs()])
+    }
+    return(dl)
+  })
   
   # Select explantory variable(s)
   x_axis <- reactive(input$x_choice)
