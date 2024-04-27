@@ -15,6 +15,9 @@ library(multcompView)
 d_orig <- read.csv("../Data/Clean/complete_combined_spruce_data.csv")
 # Replace dash with underscore in depth ranges so the names don't confuse the modeling
 d_orig$depth2 <- gsub("-","_",d_orig$depth2)
+# Relevel depth variable
+d_orig$depth2 <- factor(d_orig$depth2,levels=c("0_10","10_20","20_30","30_40",
+                                               "40_50","50_75","75_100","100_125","150_175"))
 
 ui <- dashboardPage(
   title = "SPRUCE",
@@ -64,12 +67,18 @@ ui <- dashboardPage(
                                          
                             )),
                         box(width=NULL,
-                             materialSwitch(inputId = "include_ambient",
-                                            label = "Include ambient temperature treatment?")
+                            "Include ambient temperature treatment?",
+                             switchInput(inputId = "include_ambient",
+                                            label = "Include\nambient",
+                                         onLabel = "Yes",
+                                         offLabel = "No")
                             ),
                         box(width=NULL,
-                            materialSwitch(inputId = "log_transform_anova",
-                                           label = "Log-transform response variable?")
+                            "Log-transform response variable?",
+                            switchInput(inputId = "log_transform_anova",
+                                           label = "Log-transform",
+                                        onLabel = "Yes",
+                                        offLabel = "No")
                         )
         ),
         column(width=8,
