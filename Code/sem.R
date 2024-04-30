@@ -1,53 +1,54 @@
 ### SEM for all SPRUCE variables ###
 
 spruce_orig <- read.csv("./Data/Clean/complete_combined_spruce_data_noprecip.csv")
-str(spruce_orig)
+# str(spruce_orig)
+# 
+# # Expect bacteria and archaea copy num to be influenced by measured temp, depth,
+# # DOC, DN, gravimetric water content GWC
+# # Expect measured temp to be influenced by temp_experimental, co2_treatment, sample_date
+# # MBC, MBN influenced by bacteria/archae copy num, GWC
+# 
+# ### Add precipitation back into this dataframe
+# env <- read.csv("./Data/Clean/dailymean_environmental_data_2021.csv")
+# 
+# # Convert day of year to date
+# env$Sample_date <- as.character(as.Date(env$Day_of_Year,origin="2020-12-31"))
+# 
+# # Grab precip data
+# spruce <- merge(spruce_orig,env[,c("Sample_date","Plot","PREC_6")],
+#                  by=c("Sample_date","Plot"),all.x=T,all.y=F)
+# 
+# # Due to "heterogeneity between the two replicate samples" used to calculate MBN
+# # and MBC, there are a few negative values that naturally become NAs when log-transformed.
+# # Since negative values are nonsensical, we'll change these values to 0 
+# # to reflect that they have a very small microbial biomass. We'll then add 1
+# # to DN and DOC for the log transformation.
+# spruce[which(spruce$MBN<0),"MBN"] <- 0
+# spruce[which(spruce$MBC<0),"MBC"] <- 0
+# 
+# # Set MBN outlier to NA
+# spruce[which(spruce$MBN>100),"MBN"] <- NA
+# 
+# # Remove extra column
+# spruce$X <- NULL
+# 
+# # Save this new dataset
+# write.csv(spruce,"./Data/Clean/complete_combined_spruce_data.csv",row.names=F)
 
-# Expect bacteria and archaea copy num to be influenced by measured temp, depth,
-# DOC, DN, gravimetric water content GWC
-# Expect measured temp to be influenced by temp_experimental, co2_treatment, sample_date
-# MBC, MBN influenced by bacteria/archae copy num, GWC
-
-### Add precipitation back into this dataframe
-env <- read.csv("./Data/Clean/dailymean_environmental_data_2021.csv")
-
-# Convert day of year to date
-env$Sample_date <- as.character(as.Date(env$Day_of_Year,origin="2020-12-31"))
-
-# Grab precip data
-spruce <- merge(spruce_orig,env[,c("Sample_date","Plot","PREC_6")],
-                 by=c("Sample_date","Plot"),all.x=T,all.y=F)
-
-# Due to "heterogeneity between the two replicate samples" used to calculate MBN
-# and MBC, there are a few negative values that naturally become NAs when log-transformed.
-# Since negative values are nonsensical, we'll change these values to 0 
-# to reflect that they have a very small microbial biomass. We'll then add 1
-# to DN and DOC for the log transformation.
-spruce[which(spruce$MBN<0),"MBN"] <- 0
-spruce[which(spruce$MBC<0),"MBC"] <- 0
-
-# Set MBN outlier to NA
-spruce[which(spruce$MBN>100),"MBN"] <- NA
-
-# Remove extra column
-spruce$X <- NULL
-
-# Save this new dataset
-write.csv(spruce,"./Data/Clean/complete_combined_spruce_data.csv",row.names=F)
+# Read in this dataset
+spruce <- read.csv("./Data/Clean/complete_combined_spruce_data.csv")
 
 #### Covariance matrix ####
 # First, investigate correlations
 GGally::ggpairs(spruce[,c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")],
                 lower=list(continuous="smooth_lm"))
 
-# Remove outlier from MBN
-GGally::ggpairs(spruce[-which(spruce$MBN>100),c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")],
-                lower=list(continuous="smooth_lm"))
-
-# Full covariance matrix
-GGally::ggpairs(subset(spruce, MBN < 100, select = -c(Sample_date,Plot,X,datesitedepth)),
-                lower=list(continuous="smooth_lm"))
-# Considering half our variables are categorical right now maybe this wasn't the right choice...
+# Full covariance matrix, excluding non-numeric treatments/depth
+GGally::ggpairs(subset(spruce, MBN < 100, 
+                       select = -c(Sample_date,Plot,datesitedepth,Temp_experimental,CO2_treatment,depth2)),
+                lower=list(continuous="smooth_lm")) + theme_light()
+ggsave("C:/Users/linne/Documents/School/Cornell/MultivariateAnalysis/FinalProject/spruce_analysis/Plots/cov_matrix_orig.png",
+       width=5000,height=3000,units="px")
 
 # for app: allow user to choose response variables, predictor variables -- 
 # construct SEM from there. but DEFAULT to what we think the most reasonable 
@@ -158,7 +159,7 @@ plot(MBN_lm)
 # Point 139 is a huge outlier, we noticed it in the covariance testing as well.
 # Remove it by setting it to NA but keeping the row intact (is this legit?)
 spruce_no_out <- spruce
-spruce_no_out[139,"MBN"] <- NA
+#spruce_no_out[139,"MBN"] <- NA
 MBN_lm <- lm(MBN ~ DN_unfumigated_soil + temp + GWC,
              data=spruce_no_out, na.action=na.omit)
 plot(MBN_lm)
@@ -183,7 +184,7 @@ hist(spruce$MBC)
 hist(log(spruce$MBC))
 # It just kind of shifts to left-skewed... still, see if this helps the model
 MBC_log_lm <- lm(log(MBC) ~ DOC_unfumigated_soil + temp + GWC,
-                     data=spruce, na.action=na.omit)
+                 data=spruce, na.action=na.omit)
 par(mfrow=c(2,2))
 plot(MBC_log_lm)
 # Honestly not sure which is better! Maybe go with log-transformed for consistency. 
@@ -192,13 +193,17 @@ plot(MBC_log_lm)
 #### Scale, log-transform data ####
 # Log-transform the variables that need log-transformation as determined above.
 # Also scale the entire dataset.
-spruce_no_out <- spruce
-spruce_no_out[139,"MBN"] <- NA
 
 # The ambient temperature treatment is very different to the 0.00 treatment. Since
 # the ambient plots were treated differently to the rest of the plots and may
 # not be comparable, so we'll remove them.
-spruce_noAmb <- spruce_no_out[-which(spruce_no_out$Temp_experimental=="Amb"),]
+spruce_noAmb <- spruce[-which(spruce$Temp_experimental=="Amb"),]
+
+# Make Temp_experimental numeric now that we've removed ambient
+spruce_noAmb$Temp_experimental <- as.numeric(spruce_noAmb$Temp_experimental)
+
+# Remove all NA rows, to make sure that the SEM is fitting the same dataset for each model
+spruce_noAmb <- na.omit(spruce_noAmb)
 
 # Initialize dataframe for transformation/scaling
 spruce_log_scale <- spruce_noAmb
@@ -216,7 +221,7 @@ spruce_log_scale$MBN <- spruce_log_scale$MBN + 1
 spruce_log_scale$MBC <- spruce_log_scale$MBC + 1
 
 # Transform
-spruce_log_scale[,to_transform] <- log(spruce_log_scale[,to_transform])
+spruce_log_scale[,to_transform] <- apply(spruce_log_scale[,to_transform],2,log)
 
 ### Scale all numerical values
 # Vector of numeric columns
@@ -235,28 +240,19 @@ colnames(spruce_log_scale)[to_scale]
 # Scale columns
 spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
 
-# Remove all NA rows, to make sure that the SEM is fitting the same dataset for each model
-spruce_log_scale_noNA <- na.omit(spruce_log_scale)
+### Covariance matrix with log-transformed scaled data
+GGally::ggpairs(subset(spruce_log_scale,
+                       select = -c(Sample_date,Plot,datesitedepth,CO2_treatment,depth2)),
+                lower=list(continuous="smooth_lm")) + theme_light()
+ggsave("C:/Users/linne/Documents/School/Cornell/MultivariateAnalysis/FinalProject/spruce_analysis/Plots/cov_matrix_logscale.png",
+       width=5000,height=3000,units="px")
 
-#### Global structural equation modeling ####
-# Since regular linear models are suitable for everything, we can 
-# use a global modeling approach.
-library(lavaan)
-
-sem_formula <- '
-  DOC_unfumigated_soil ~ depth2
-  DN_unfumigated_soil ~ depth2
-  temp ~ Temp_experimental + CO2_treatment + depth2 + Sample_date
-  GWC ~ depth2 + Sample_date
-  Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp
-  Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp
-  MBN ~ DN_unfumigated_soil + temp + GWC
-  MBC ~ DOC_unfumigated_soil + temp + GWC
-'
-
-spruce_sem <- sem(sem_formula, data = spruce_log_scale)
-
-summary(spruce_sem, standardize = T, rsq = T)
+### Redo covariance matrix with comparable original data
+GGally::ggpairs(subset(spruce_noAmb,
+                       select = -c(Sample_date,Plot,datesitedepth,CO2_treatment,depth2)),
+                lower=list(continuous="smooth_lm")) + theme_light()
+ggsave("C:/Users/linne/Documents/School/Cornell/MultivariateAnalysis/FinalProject/spruce_analysis/Plots/cov_matrix_noAmb.png",
+       width=5000,height=3000,units="px")
 
 #### Piecewise structural Equation Modeling ####
 library(piecewiseSEM)
@@ -266,21 +262,21 @@ library(piecewiseSEM)
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale_noNA, na.action=na.omit),
-  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale_noNA, na.action=na.omit),
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_log_scale, na.action=na.omit),
   lm(temp ~ Temp_experimental + CO2_treatment + depth2,
-     data=spruce_log_scale_noNA, na.action=na.omit),
-  lm(GWC ~ depth2 + temp + PREC_6, data=spruce_log_scale_noNA, na.action=na.omit),
-
+     data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + temp + PREC_6, data=spruce_log_scale, na.action=na.omit),
+  
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
   lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_log_scale_noNA, na.action=na.omit),
+     data=spruce_log_scale, na.action=na.omit),
   lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_log_scale_noNA, na.action=na.omit),
+     data=spruce_log_scale, na.action=na.omit),
   lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_log_scale_noNA, na.action=na.omit),
+     data=spruce_log_scale, na.action=na.omit),
   lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_log_scale_noNA, na.action=na.omit)
+     data=spruce_log_scale, na.action=na.omit)
   
 )
 
