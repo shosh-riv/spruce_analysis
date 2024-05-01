@@ -13,7 +13,7 @@ library(multcompView)
 library(DiagrammeR)
 
 # Read in data (note: once dataset finalized, move to shiny folder)
-d_orig <- read.csv("../Data/Clean/complete_combined_spruce_data.csv")
+d_orig <- read.csv("./Data/complete_combined_spruce_data.csv")
 # Replace dash with underscore in depth ranges so the names don't confuse the modeling
 d_orig$depth2 <- gsub("-","_",d_orig$depth2)
 # Relevel depth variable
@@ -21,9 +21,9 @@ d_orig$depth2 <- factor(d_orig$depth2,levels=c("0_10","10_20","20_30","30_40",
                                                "40_50","50_75","75_100","100_125","150_175"))
 
 # Read in DOT plot for SEM
-dot_diagram <-readLines("../Plots/dot_psem.txt")
+dot_diagram <-readLines("./Data/dot_psem.txt")
 # Read in PSEM summary object
-spruce_num_psem_summary <- readRDS("../Analyses/psem_numeric_summary.RDS")
+spruce_num_psem_summary <- readRDS("./Data/psem_numeric_summary.RDS")
 
 ui <- dashboardPage(
   title = "SPRUCE",
