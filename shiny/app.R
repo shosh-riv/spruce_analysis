@@ -89,18 +89,18 @@ ui <- dashboardPage(
         ),
         column(width=8,
                box(width=NULL,
+                   plotOutput("explore_plot")),
+               box(width=NULL,
                    title = "Interactions",
                    tableOutput("interaction_table"),
-                   tableOutput("test_xletters"), # this and below: for testing
-                   tableOutput("test_forlegend"),
-                   verbatimTextOutput("tukey_test"),
-                   tableOutput("tukeyp_test") 
-               ),
-               box(width=NULL,
-                   plotOutput("explore_plot"))
+                   # tableOutput("test_xletters"), # this and below: for testing
+                   # tableOutput("test_forlegend"),
+                   # verbatimTextOutput("tukey_test"),
+                   # tableOutput("tukeyp_test") 
+               )
         ))
       ),
-      #### Regression tab ####
+      #### PCA tab ####
       tabItem(
         tabName = "PCA",
         fluidRow(
