@@ -257,7 +257,7 @@ library(piecewiseSEM)
 spruce_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOC_unfumigated_soil ~ depth2 + CO2_treatment, data=spruce_log_scale, na.action=na.omit),
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment, data=spruce_log_scale, na.action=na.omit),
   lm(DN_unfumigated_soil ~ depth2 + Temp_experimental, data=spruce_log_scale, na.action=na.omit),
   lm(temp ~ Temp_experimental + depth2,
      data=spruce_log_scale, na.action=na.omit),
@@ -288,9 +288,14 @@ summary(spruce_psem)
 
 # Add temperature to DOC, DN
 spruce_psem <- update(spruce_psem,
-                      DOC_unfumigated_soil ~ depth2 + CO2_treatment + temp,
-                      DN_unfumigated_soil ~ depth2 + temp)
+                      DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + temp,
+                      DN_unfumigated_soil ~ depth2 + Temp_experimental + temp)
 summary(spruce_psem)
+
+#### Plot PSEM
+source("./Code/plot_psem.R")
+library(DiagrammeR)
+plot.psem(spruce_psem)
 
 ## What happens if we make all variables numeric?## WTemp_experimentalhat happens if we make all variables numeric?
 
@@ -303,9 +308,9 @@ spruce_num$Temp_experimental <- as.numeric(spruce_num$Temp_experimental)
 ### CO2 treatment
 unique(spruce_num$CO2_treatment)
 
-# A is ambient, and E is elevated 500 ppm above ambient. Change these to 0 and 500.
+# A is ambient, and E is elevated 500 ppm above ambient. Change these to 0 and 1.
 spruce_num[which(spruce_num$CO2_treatment=="A"),"CO2_treatment"] <- 0
-spruce_num[which(spruce_num$CO2_treatment=="E"),"CO2_treatment"] <- 500
+spruce_num[which(spruce_num$CO2_treatment=="E"),"CO2_treatment"] <- 1
 spruce_num$CO2_treatment <- as.numeric(spruce_num$CO2_treatment)
 
 ### Depth
@@ -365,29 +370,70 @@ spruce_num_log_scale_noNA <- na.omit(spruce_num_log_scale)
 spruce_num_psem <- psem(
   
   # Intermediate layer: DOC, DN, temperature, GWC
-  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_num_log_scale_noNA, na.action=na.omit),
-  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + GWC, data=spruce_num_log_scale_noNA, na.action=na.omit),
-  lm(temp ~ Temp_experimental + CO2_treatment + depth2,
-     data=spruce_num_log_scale_noNA, na.action=na.omit),
-  lm(GWC ~ depth2 + temp + PREC_6, data=spruce_num_log_scale_noNA, na.action=na.omit),
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + temp, data=spruce_num_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + temp, data=spruce_num_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + depth2,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + PREC_6, data=spruce_num_log_scale, na.action=na.omit),
   
   # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
-  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_num_log_scale_noNA, na.action=na.omit),
-  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_num_log_scale_noNA, na.action=na.omit),
-  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_num_log_scale_noNA, na.action=na.omit),
-  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
-     data=spruce_num_log_scale_noNA, na.action=na.omit)
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2,
+     data=spruce_num_log_scale, na.action=na.omit)
   
 )
 
 summary(spruce_num_psem, .progressBar = FALSE)
-# This is the worst model we've fit yet by far (bad R2s). Compare AICs:
+summary(spruce_num_psem, .progressBar = FALSE)$R2
+summary(spruce_psem, .progressBar = F)$R2
+
+# This is worse than the categorical SEM for explaining DOC, MBN, and MBC, but
+# somewhat better for bacteria and archaea copy number. 
+# Compare AICs:
 AIC_psem(spruce_psem)
 AIC_psem(spruce_num_psem)
-# Numeric is worse than categorical; stick to categorical dataset.
+# Numeric is better than categorical; try using it to plot.
+
+diagram <- plot.psem(spruce_num_psem,digits=1, return=T, layout="tree")
+plot.psem(spruce_num_psem,layout="tree")
+
+
+#### Plotting ####
+
+## Modify the nodes DF
+# Readable labels
+diagram$nodes_df$label <- c("DOC","DN","Soil\ntemp.","GWC","Bacteria",
+                            "Archaea","MBN","MBC","Depth","Exp.\ntemp.",
+                            "CO2\nlevel","Precip.")
+
+# Different shapes for exogenous and endogenous variables
+diagram$nodes_df$shape <- c(rep("oval",times=8),rep("rectangle",times=4))
+
+# Change layout
+diagram$global_attrs[1,2] <- "dot"
+
+# Make nodes a little wider
+diagram$global_attrs[8,2] <- 0.6
+
+# Convert node ID numbers to descriptions so the mouseover will be descriptive
+node_ids <- diagram$nodes_df$label
+names(node_ids) <-  diagram$nodes_df$id
+diagram$nodes_df$id <-diagram$nodes_df$label
+
+diagram$edges_df$from <- node_ids[diagram$edges_df$from]
+diagram$edges_df$to <- node_ids[diagram$edges_df$to]
+
+# See how it all looks
+render_graph(diagram)
+
+# Convert to graphViz/DOT format to put into shiny
+dot <- generate_dot(diagram)
+
 
 ## Model identification
 # Model still doesn't fit. Check the t-rule. The model currently includes
