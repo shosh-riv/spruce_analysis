@@ -22,6 +22,8 @@ d_orig$depth2 <- factor(d_orig$depth2,levels=c("0_10","10_20","20_30","30_40",
 
 # Read in DOT plot for SEM
 dot_diagram <-readLines("../Plots/dot_psem.txt")
+# Read in PSEM summary object
+spruce_num_psem_summary <- readRDS("../Analyses/psem_numeric_summary.RDS")
 
 ui <- dashboardPage(
   title = "SPRUCE",
@@ -128,7 +130,17 @@ ui <- dashboardPage(
         fluidRow(
           column(width=12,
                  box(width=NULL,
-                     grVizOutput("psem_plot")))
+                     title = "Piecewise Structural Equation Model",
+                     grVizOutput("psem_plot")),
+                 box(width=6,
+                     title = "Goodness of fit",
+                     tableOutput("psem_chisq"),
+                     tableOutput("psem_c"),
+                     tableOutput("psem_aic")),
+                 box(width=6,
+                     title = "R-squared",
+                     tableOutput("psem_r2"))
+                 )
         )
       )
     )
@@ -305,7 +317,25 @@ server <- function(input, output){
   output$explore_plot <- renderPlot(exploratory_plot())
   
   #### SEM ####
+  # Interactive plot
   output$psem_plot <- renderGrViz(grViz(dot_diagram))
+  
+  # Model fit
+  output$psem_chisq <- renderTable(spruce_num_psem_summary$ChiSq)
+  output$psem_c <- renderTable(spruce_num_psem_summary$Cstat)
+  output$psem_aic <- renderTable(spruce_num_psem_summary$AIC)
+  
+  # R-squared
+  output$psem_r2 <- renderTable({
+    response_vars <- c("Dissolved organic carbon (DOC)","Dissolved nitrogen (DN)",
+                       "Soil temperature","Gravimetric water content (GWC)",
+                       "Bacteria Abundance","Archaea Abundance",
+                       "Microbial biomass nitrogen (MBN)",
+                       "Microbial biomass carbon (MBC)")
+    out <- spruce_num_psem_summary$R2[,c("Response","R.squared")]
+    out$Response <- response_vars
+    return(out)
+    })
 }
 
 shinyApp(ui = ui, server = server)
