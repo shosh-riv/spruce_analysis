@@ -19,6 +19,8 @@ d_orig$depth2 <- gsub("-","_",d_orig$depth2)
 # Relevel depth variable
 d_orig$depth2 <- factor(d_orig$depth2,levels=c("0_10","10_20","20_30","30_40",
                                                "40_50","50_75","75_100","100_125","150_175"))
+# Remove NA
+d_orig <- na.omit(d_orig)
 
 # Read in DOT plot for SEM
 dot_diagram <-readLines("./Data/dot_psem.txt")
@@ -152,8 +154,8 @@ ui <- dashboardPage(
 server <- function(input, output){
   #### PCA plot ####
   output$pca_plot <- renderPlot({
-    autoplot(prcomp(d[,input$selected], scale = T), 
-             data = d, 
+    autoplot(prcomp(d_orig[,input$selected], scale = T), 
+             data = d_orig, 
              colour= input$selection) + 
       theme_bw()
     })
