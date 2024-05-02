@@ -279,10 +279,10 @@ summary(spruce_psem, .progressBar = FALSE)
 
 ## Add some parameters in based on d-sep tests (currently can afford to add 12 relationships)
 
-# Add depth to MBN, MBC (10 relationships left to add)
+# Add depth, experimental temperature to MBN, MBC (8 relationships left to add)
 spruce_psem <- update(spruce_psem,
-       MBN ~ DN_unfumigated_soil + temp + GWC + depth2,
-       MBC ~ DOC_unfumigated_soil + temp + GWC + depth2)
+       MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+       MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental)
 summary(spruce_psem)
 # R-squared for MBN and MBC much higher now!
 
@@ -297,7 +297,8 @@ source("./Code/plot_psem.R")
 library(DiagrammeR)
 plot.psem(spruce_psem)
 
-## What happens if we make all variables numeric?## WTemp_experimentalhat happens if we make all variables numeric?
+## What happens if we make all variables numeric? We need to to use the plotting
+## function anyway! (Can't deal with ANOVAs)
 
 #### Make categorical variables numeric ####
 spruce_num <- spruce_noAmb
@@ -381,9 +382,9 @@ spruce_num_psem <- psem(
      data=spruce_num_log_scale, na.action=na.omit),
   lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
      data=spruce_num_log_scale, na.action=na.omit),
-  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2,
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
      data=spruce_num_log_scale, na.action=na.omit),
-  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2,
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
      data=spruce_num_log_scale, na.action=na.omit)
   
 )
@@ -392,12 +393,11 @@ summary(spruce_num_psem, .progressBar = FALSE)
 summary(spruce_num_psem, .progressBar = FALSE)$R2
 summary(spruce_psem, .progressBar = F)$R2
 
-# This is worse than the categorical SEM for explaining DOC, MBN, and MBC, but
-# somewhat better for bacteria and archaea copy number. 
+# This is worse than the categorical SEM for explaining all endogenous variables.
 # Compare AICs:
 AIC_psem(spruce_psem)
 AIC_psem(spruce_num_psem)
-# Numeric is better than categorical; try using it to plot.
+# Categorical is better than numeric. Still, try using it to plot.
 
 diagram <- plot.psem(spruce_num_psem,digits=1, return=T, layout="tree")
 plot.psem(spruce_num_psem,layout="tree")
@@ -433,6 +433,12 @@ render_graph(diagram)
 
 # Convert to graphViz/DOT format to put into shiny
 dot <- generate_dot(diagram)
+
+# Save DOT output for use in graphViz/Shiny
+writeLines(dot,"./Plots/dot_psem.txt")
+
+# Also save the PSEM summary
+saveRDS(summary(spruce_num_psem),file = "./Analyses/psem_numeric_summary.RDS")
 
 
 ## Model identification
