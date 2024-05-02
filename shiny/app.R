@@ -38,7 +38,7 @@ ui <- dashboardPage(
   # Sidebar
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Introduction",tabName="intro"),
+      #menuItem("Introduction",tabName="intro"),
       menuItem("Exploration",tabName="exploration"),
       menuItem("Principal Component Analysis",tabName="PCA"),
       menuItem("SEM",tabName="sem")
@@ -49,10 +49,10 @@ ui <- dashboardPage(
   dashboardBody(
     tabItems(
       #### Introduction tab ####
-      tabItem(
-        tabName = "intro",
-        # Upload introduction (HTML file) here
-      ),
+      # tabItem(
+      #   tabName = "intro",
+      #   # Upload introduction (HTML file) here
+      # ),
       #### Data exploration tab ####
       tabItem(
         tabName = "exploration",
