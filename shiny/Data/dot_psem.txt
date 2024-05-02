@@ -67,14 +67,18 @@ temp.'->'Bacteria' [style = 'solid', color = 'black', label = ' 0.3 ']
 'Soil
 temp.'->'Archaea' [style = 'dashed', color = 'black', label = ' -0.1 '] 
 'GWC'->'Archaea' [style = 'solid', color = 'black', label = ' 0.3 '] 
-'DN'->'MBN' [style = 'solid', color = 'black', label = ' -0.4 '] 
+'DN'->'MBN' [style = 'solid', color = 'black', label = ' -0.3 '] 
 'Soil
-temp.'->'MBN' [style = 'solid', color = 'black', label = ' 0.3 '] 
+temp.'->'MBN' [style = 'solid', color = 'black', label = ' 0.6 '] 
 'GWC'->'MBN' [style = 'solid', color = 'black', label = ' 0.2 '] 
-'Depth'->'MBN' [style = 'solid', color = 'black', label = ' -0.3 '] 
-'DOC'->'MBC' [style = 'solid', color = 'black', label = ' -0.2 '] 
+'Depth'->'MBN' [style = 'dashed', color = 'black', label = ' -0.1 '] 
+'Exp.
+temp.'->'MBN' [style = 'solid', color = 'black', label = ' -0.3 '] 
+'DOC'->'MBC' [style = 'dashed', color = 'black', label = ' -0.1 '] 
 'Soil
-temp.'->'MBC' [style = 'solid', color = 'black', label = ' 0.4 '] 
-'GWC'->'MBC' [style = 'solid', color = 'black', label = ' 0.4 '] 
-'Depth'->'MBC' [style = 'dashed', color = 'black', label = ' -0.1 '] 
+temp.'->'MBC' [style = 'solid', color = 'black', label = ' 0.6 '] 
+'GWC'->'MBC' [style = 'solid', color = 'black', label = ' 0.3 '] 
+'Depth'->'MBC' [style = 'dashed', color = 'black', label = ' 0 '] 
+'Exp.
+temp.'->'MBC' [style = 'solid', color = 'black', label = ' -0.2 '] 
 }
