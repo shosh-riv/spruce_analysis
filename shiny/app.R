@@ -12,7 +12,7 @@ library(plotly)
 library(multcompView)
 library(DiagrammeR)
 
-# Read in data (note: once dataset finalized, move to shiny folder)
+# Read in original (non-transformed, non-scaled) data
 d_orig <- read.csv("./Data/complete_combined_spruce_data.csv")
 # Replace dash with underscore in depth ranges so the names don't confuse the modeling
 d_orig$depth2 <- gsub("-","_",d_orig$depth2)
@@ -21,6 +21,17 @@ d_orig$depth2 <- factor(d_orig$depth2,levels=c("0_10","10_20","20_30","30_40",
                                                "40_50","50_75","75_100","100_125","150_175"))
 # Remove NA
 d_orig <- na.omit(d_orig)
+
+# Read in scaled, log-transformed data
+d_log_scale <- read.csv("../Data/Clean/complete_spruce_logged_scaled.csv")
+# Replace dash with underscore in depth ranges so the names don't confuse the modeling
+d_log_scale$depth2 <- gsub("-","_",d_log_scale$depth2)
+# Relevel depth variable
+d_log_scale$depth2 <- factor(d_log_scale$depth2,levels=c("0_10","10_20","20_30","30_40",
+                                               "40_50","50_75","75_100","100_125","150_175"))
+# Make experimental temperature a factor so that its levels can be distinguished in the PCA
+d_log_scale$Temp_experimental <- factor(d_log_scale$Temp_experimental)
+
 
 # Read in DOT plot for SEM
 dot_diagram <-readLines("./Data/dot_psem.txt")
@@ -154,8 +165,8 @@ ui <- dashboardPage(
 server <- function(input, output){
   #### PCA plot ####
   output$pca_plot <- renderPlot({
-    autoplot(prcomp(d_orig[,input$selected], scale = T), 
-             data = d_orig, 
+    autoplot(prcomp(d_log_scale[,input$selected], scale = T), 
+             data = d_log_scale, 
              colour= input$selection,
              frame = T,
              frame.type = "norm") + 
