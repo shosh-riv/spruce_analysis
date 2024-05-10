@@ -655,5 +655,127 @@ and write to csv
 #write.csv(data,"complete_combined_spruce_data.csv" )
 ```
 
+# Exploratory analysis
+
+## Covariance matrix
+
+Before we do any proper analyses, let's check the distributions and covariances of our variables. This will tell us if we need to transform any variables, and will also let us check for multicolinearity between variables.
+
+Rename to descriptive DF name and investigate structure
+```{r}
+spruce <- data
+str(spruce)
+```
+Some of these are character and should be numeric.
+```{r}
+spruce$GWC <- as.numeric(spruce$GWC)
+spruce$DN_unfumigated_soil <- as.numeric(spruce$DN_unfumigated_soil)
+spruce$DOC_unfumigated_soil <- as.numeric(spruce$DOC_unfumigated_soil)
+spruce$MBN <- as.numeric(spruce$MBN)
+spruce$MBC <- as.numeric(spruce$MBC)
+spruce$temp <- as.numeric(spruce$temp)
+str(spruce)
+summary(spruce)
+```
+
+
+Make a covariance matrix:
+```{r}
+library(GGally)
+
+# Make covariance matrix
+ggpairs(subset(spruce, select = -c(Sample_date,Plot,datesitedepth,Temp_experimental,CO2_treatment,depth2)),
+                lower=list(continuous="smooth_lm")) + theme_light()
+```
+Looks like there's quite an outlier in MBN. Let's see what it looks like if we limit MBN to values under 100.
+
+```{r}
+ggpairs(subset(spruce, MBN < 100, 
+                       select = -c(Sample_date,Plot,datesitedepth,Temp_experimental,CO2_treatment,depth2)),
+                lower=list(continuous="smooth_lm")) + theme_light()
+```
+That makes it way better.
+
+We also saw above that there are some negative values in MBN and MBC. This is physically impossible. Looking at the dataset description we see that due to "heterogeneity between the two replicate samples" used to calculate MBN and MBC, there are a few negative values. Since negative values are nonsensical, we'll change these to 0 to reflect that they have a very small microbial biomass.
+
+```{r}
+spruce[which(spruce$MBN<0),"MBN"] <- 0
+spruce[which(spruce$MBC<0),"MBC"] <- 0
+```
+
+While we're at it, we'll also remove the row with the MBN outlier, since this value is unusable and we want to use complete cases only.
+```{r}
+spruce[which(spruce$MBN>100),"MBN"] <- NA
+spruce <- na.omit(spruce)
+```
+
+Next we'll remove the ambient temperature treatments from the dataset. To see the justification for this, look at the boxplots in the exploratory analysis section. We also will remove the row of the MBN 
+```{r}
+spruce <- spruce[-which(spruce$Temp_experimental=="Amb"),]
+```
+
+Now we can also make experimental temperature a numeric variable, since we no longer have to distinguish the +0 degrees Celcius treatment from the ambient treatment. However, we also want to keep the column where it's a factor, for the PCA.
+```{r}
+spruce$Temp_experimental_num <- as.numeric(spruce$Temp_experimental)
+```
+
+
+Finally, looking at the distributions of the variables (the diagonal of the covariance matrix), it looks like MBN, MBC, bacterial copy number, and archaeal copy number are all left skewed. Let's log transform these.
+
+```{r}
+spruce_log_scale <- spruce
+
+# Variables to transform
+to_transform <- c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")
+
+# Check for 0s
+apply(spruce_log_scale[,to_transform],2,FUN=min,na.rm=T)
+```
+
+Add 1 to MBC and MBN because they include 0.
+```{r}
+spruce_log_scale$MBN <- spruce_log_scale$MBN + 1
+spruce_log_scale$MBC <- spruce_log_scale$MBC + 1
+```
+
+Perform log transformation.
+```{r}
+spruce_log_scale[,to_transform] <- apply(spruce_log_scale[,to_transform],2,log)
+```
+
+Finally, let's scale all values.
+```{r}
+# Vector of numeric columns
+to_scale <- unlist(lapply(spruce_log_scale, is.numeric), use.names = FALSE)
+
+# Double check these are only columns we want
+colnames(spruce_log_scale)[to_scale]
+```
+
+Whoops, Plot shouldn't be numeric -- we aren't going to be using it in any of our transformations or analyses. We'll make it a character and check the variables to be scaled again.
+```{r}
+# Make plot into a character
+spruce_log_scale$Plot <- as.character(spruce_log_scale$Plot)
+
+# Redo the vector of numeric columns
+to_scale <- unlist(lapply(spruce_log_scale, is.numeric), use.names = FALSE)
+colnames(spruce_log_scale)[to_scale]
+```
+
+Those are all the columns we want to scale - let's actually perform the scaling now.
+```{r}
+# Scale columns
+spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
+
+```
+
+Save this
+```{r}
+# write.csv(spruce_log_scale,"./Data/Clean/complete_spruce_logged_scaled.csv",row.names = F)
+```
+# Exploratory analysis
+
+
+## Covariance matrix
 
 
