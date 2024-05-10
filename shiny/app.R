@@ -156,7 +156,9 @@ server <- function(input, output){
   output$pca_plot <- renderPlot({
     autoplot(prcomp(d_orig[,input$selected], scale = T), 
              data = d_orig, 
-             colour= input$selection) + 
+             colour= input$selection,
+             frame = T,
+             frame.type = "norm") + 
       theme_bw()
     })
   
