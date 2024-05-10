@@ -1,0 +1,622 @@
+---
+title: "SPRUCE Analysis"
+author: "Autumn Pereira & Linnea Smith"
+date: "2024-05-10"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data handling
+
+## Environmental data
+Downloaded from here: https://www.dropbox.com/scl/fo/o9zh9o3smmjg54l20aj2r/AEb8Unqsj0rJzAb24WRBDQA/WEW_Complete_Environ_20240328?rlkey=bg4byw9cebb6m2fjvoymlioyt&dl=0
+Metadata available here: https://mnspruce.ornl.gov/datasets/spruce-whole-ecosystems-warming-wew-environmental-data-beginning-august-2015
+
+These data were taken every half hour, every day, in each plot.
+Before doing anything else, we have to combine the environmental data for all plots into a single dataset, limit it to our year of interest (2021).
+
+There is a separate file for each plot, all downloaded into one folder. Because that's a lot of files/data, we have not included this raw data in our submission, but we can provide it or it can be downloaded at the above links if necessary.
+
+First read in the files.
+```{r}
+# Vector of all files
+env_filenames <- list.files("./Data/Raw/WEW_Complete_Environ_20220518/",full.names = T)
+
+# Read in all as single list object
+env_data_list <- lapply(env_filenames,read.csv)
+
+# Extract plot numbers from file names
+plot_nums <- stringr::str_extract(env_filenames,"(PLOT_\\d\\d).",group=1)
+names(env_data_list) <- plot_nums
+
+# Add column for plot number to each DF (will need for later combination into single DF)
+for(i in 1:length(env_data_list)){
+  env_data_list[[i]]$plot_number <- stringr::str_extract(names(env_data_list)[i],"\\d+")
+}
+
+```
+
+Now we'll do some basic checks that all dataframes have the same structure, and then combine them into a single dataframe.
+```{r}
+## Check that all datasets have the same column names
+# Column names of first dataset
+plot4_env_cols <- colnames(env_data_list$PLOT_04)
+
+# Compare to the rest
+lapply(env_data_list[-1],FUN=function(x){
+  if(all(colnames(x)==plot4_env_cols)){
+    print("All columns equal")
+  } else{
+    print(which(colnames(x)!=plot4_env_cols))
+  }
+})
+# All datasets have the same columns!
+
+## Limit to just the year 2021 for all data (do this before combining into one DF
+## to avoid having a ridiculously large DF)
+env_data_list_2021 <- lapply(env_data_list,FUN=function(x){
+  return(x[x$Year==2021,])
+})
+
+# Check that the data was really reduced to only 2021
+lapply(env_data_list_2021,FUN=function(x)unique(x$Year))
+
+# What's the dimensions of each dataset?
+lapply(env_data_list_2021,FUN=dim)
+# Each plot has 17,520 observations for the year 2021, which is correct:
+48*365 # 48 observations per day, 365 days per year
+
+## Combine into one dataframe
+env_data <- data.table::rbindlist(env_data_list_2021)
+
+```
+Now let's check for irregularities in the data.
+```{r}
+summary(env_data)
+```
+
+Several columns have a few hundred NAs, but in a dataset with 210,240 observations this is neither surprising nor concerning. The deeper soil temperature measurements (TS_.100_A8, TS_.200_A9,TS_.100__C8, TS_.200__C9) have a couple thousand NAs -- maybe there were more equipment failures at lower depths, e.g. due to the higher pressure required to insert and remove equipment. It's interesting that this doesn't seem to have been the case in zone B, only in zones A and C. PREC_6 has 43,401 NAs, and seems to consist primarily of 0s. PREC_6 is the total mm of rainfall at 6 m on the central tower, at 30 minute intervals, so it makes sense why it's mostly 0s (it's not raining more often than it rains). I'm not sure why there are so many NAs, though.
+
+Are the NAs mostly in the same rows? This could indicate equipment failures on specific days.
+```{r}
+# Get the total number of NAs in each row
+row_nas <- rowSums(is.na(env_data))
+summary(row_nas)
+hist(row_nas)
+# Impossible to get a good look from this histogram. Narrow down to 0-20
+hist(row_nas,breaks=c(seq(0,20,1),length(row_nas)),xlim=c(0,20))
+```
+
+The majority of rows have 0 NAs. Remove all of these to get a better look
+```{r}
+row_nas <- row_nas[row_nas>0]
+summary(row_nas)
+hist(row_nas)
+hist(row_nas,breaks=c(seq(0,91,1)))
+# Looks like most rows that have NAs only have 1, and almost all have fewer than 5.
+sum(row_nas == 91); sum(row_nas>50); sum(row_nas>20)
+# 269 rows have 91 NAs; 471 more than 50; 491 more than 20.
+sum(row_nas < 20); sum(row_nas==1)
+```
+By contrast, 46,993 rows have fewer than 20 NAs; of these, 40,672 rows have
+only 1 NA. So no, the NAs are not mostly the same rows. However, this is probably
+because PREC_6 has so many more NAs than any other column. What happens if we
+do the same thing with PREC_6 removed?
+```{r}
+row_nas_nop <- rowSums(is.na(as.data.frame(env_data)[,c(which(colnames(env_data)!="PREC_6"))]))
+summary(row_nas_nop)
+
+row_nas_nop <- row_nas_nop[row_nas_nop>0]
+summary(row_nas_nop)
+hist(row_nas_nop,seq(1,max(row_nas_nop),1))
+```
+No, the vast majority are still singlet NAs. No further action needed - there are
+more than enough datapoints in each variable to make scattered individual NAs
+unimportant. Rows with more NAs are so rare as to be unimportant as well.
+
+Now we'll check the data types of the different columns.
+```{r}
+## Year.Fraction, WS_10, PAR_2, and plot_number should all be numeric.
+# Year.Fraction
+head(env_data$Year.Fraction) # no immediately visible reason to not be numeric
+test <- as.numeric(env_data$Year.Fraction)
+sum(is.na(test)) # no NAs ==> no incorrect conversions from character to numeric
+env_data$Year.Fraction <- as.numeric(env_data$Year.Fraction)
+
+# WS_10
+head(env_data$WS_10,50)
+test <- as.numeric(env_data$WS_10)
+sum(is.na(test))==sum(is.na(env_data$WS_10))
+# Which columns became NA when converting to numeric?
+bad <- which(is.na(test) & !is.na(env_data$WS_10))
+unique(env_data[bad,"WS_10"])
+# They're all just empty. It's correct to convert them to NA so we can make the conversion.
+env_data$WS_10 <- as.numeric(env_data$WS_10)
+
+# PAR_2
+head(env_data$PAR_2,50)
+test <- as.numeric(env_data$PAR_2)
+sum(is.na(test))==sum(is.na(env_data$PAR_2))
+bad <- which(is.na(test) & !is.na(env_data$PAR_2))
+unique(env_data[bad,"PAR_2"])
+# It looks like entries in the 1000s were sometimes written with a comma, causing
+# them to register as character and not convert to numeric. Remove all commas
+# in the column and then convert to numeric
+test<-env_data$PAR_2
+test2<-gsub(",","",test)
+test3 <- as.numeric(test2)
+sum(is.na(test3))==sum(is.na(test)) # Confirm the commas were the only problem
+
+env_data$PAR_2 <- gsub(",","",env_data$PAR_2)
+env_data$PAR_2 <- as.numeric(env_data$PAR_2)
+
+```
+
+
+### Daily environmental data
+Currently, we have the environmental data for every half hour of the whole year. Our response datasets contain data at a temporal resolution of 1 day, so we'll take daily averages of the environmental data.
+```{r}
+# Rename dataframe for clarity, make dataframe (was data.table)
+env_data_full <- data.frame(env_data)
+
+# Names of columns that remain relevant with daily data (timestamp, etc. become 
+# unnecessary) and environmental data except for precipitation
+daily_cols <- colnames(env_data_full)[c(1,6,8:(ncol(env_data_full)-2))]
+
+# Sum up precipitation by day and plot
+daily_precip <- aggregate(env_data_full[,"PREC_6"],
+                            by=list(env_data_full$Day_of_Year,
+                                    env_data_full$Plot),
+                            FUN = sum,na.rm=T)
+colnames(daily_precip) <- c("Day_of_Year","Plot","PREC_6")
+
+# Aggregate the other data by averaging over day and plot, removing NAs from the calculations
+env_data_daily <- aggregate(env_data_full[,daily_cols],
+                            by=list(env_data_full$Day_of_Year,
+                                    env_data_full$Plot),
+                            FUN = mean,na.rm=T)
+
+# Group.1 and Group.2 are extraneous - they are the same as Day_of_Year and Plot
+# Confirm this
+sum(env_data_daily$Group.1==env_data_daily$Day_of_Year) == nrow(env_data_daily)
+sum(env_data_daily$Group.2==env_data_daily$Plot) == nrow(env_data_daily)
+
+# Remove columns
+env_data_daily$Group.1 <- NULL
+env_data_daily$Group.2 <- NULL
+
+# Merge this with the precip data
+env_data_daily <- merge(env_data_daily,daily_precip,by=c("Day_of_Year","Plot"))
+
+# Make sure this all worked the way we wanted it to
+table(env_data_daily$Plot)
+# Each of the 12 plots has 365 entries, one for every day of the year. This is correct
+```
+
+We'll now do some checks on missing data in this aggregated environmental dataset.
+```{r}
+# Check overall structure of new dataset
+summary(env_data_daily)
+
+# Quite a few columns have 2 NAs -- assume this is a complete lack of data for that
+# column on that day, but check in larger dataset to make sure
+env_data_daily[which(is.na(env_data_daily$TS_0__A1)),c("Day_of_Year","Plot")]
+env_data_full[which(env_data_full$Day_of_Year==226 &
+                      env_data_full$Plot==10),"TS_0__A1"]
+env_data_full[which(env_data_full$Day_of_Year==227 &
+                      env_data_full$Plot==10),"TS_0__A1"]
+# As expected -- all NAs. 
+```
+
+Some columns (TS_.100__A8, TS_.200__A9, TS_.200__C9) have around 40 NAs. These are also
+the ones that had thousands of NAs in the half-hourly dataset, so this isn't
+surprising and doesn't need to be investigated further.
+
+```{f}
+# Save this daily data.
+#write.csv(env_data_daily,"./Data/Clean/dailymean_environmental_data_2021.csv",row.names = F)
+```
+This dataset and all others moving forward are included with the submission. We will comment out all calls to write.csv() so as not to overwrite anything, but include the calls nonetheless so that you can see the file names.
+
+Now that we have usable environmental data, we'll have a think about what we want to use for our analysis and whittle it down to those variables.
+
+### Reduce environmental data
+
+
+(Note: the previous chunk was written by Linnea, the following by Autumn, with slightly different names for the dataframes, hence the inconsistencies.)
+Set up for the next chunk.
+```{r}
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gsubfn)
+
+```
+
+Let's take a look our column names.
+
+```{r}
+envr <- env_data_daily
+
+cols <- colnames(envr)
+
+cols[10:20]
+```
+
+These correspond to the soil temperature at different layers. For instance, TS_.5__A2 is the soil temperature at 5 cm below the soil surface in Zone A, while TS_.100__A8 is the temperature at 100cm below the soil surface in Zone A
+
+A lot of the variables are of this type, reporting the soil temperature at different depths in different zones.
+
+Let's convert this table into long form using the pivot_longer() function
+
+```{r}
+envr <- pivot_longer(envr, cols= 6:96, names_to= "measure")
+```
+
+That looks better. Let's now make sure to only include soil temperature measurements. We will start by separating out the variable names to have 
+
+- a column of "measured" (the first two letters of the variable name, where TS= soil temp, RH= relative humidity, WS= wind speed, WD= wind direction)
+
+- a column of depth
+
+- a column of the "zone" it is in
+
+```{r}
+envr <- envr %>% mutate(var_measured = substr(measure, 1, 2))
+envr <- envr %>% mutate(SD= str_extract(envr$measure, "_SD"))
+
+envr <- subset(envr, var_measured == "TS")
+envr <- subset(envr, is.na(SD) ==T)
+envr <- envr[, -c(9)]
+
+envr <- envr %>% mutate(depth = str_extract(measure, "_.(\\d+)", group = 1))
+envr <- envr %>% mutate(zone = str_extract(envr$measure, "__([A-Z])", group = 1))
+```
+
+We have a few NAs in our dataset, which is from the measurements taken of the soil temperature at the hummock, which is a different microtopographical element of peatlands. We won't be using these datapoints, so we will remove these.
+
+```{r}
+envr <- na.omit(envr)
+```
+
+Great ! The last thing to do is change the depth variable to a numeric
+
+```{r}
+envr$depth <- as.numeric(envr$depth)
+```
+
+Finally, we will make a table to check for anything odd
+
+```{r}
+table(envr$depth)
+```
+
+So it seems that a few entries may be missing for the 100 and 200 depths. Another thing to note is that the soil temperature was never taken at 1 cm, but these entries instead correspond to 0 cm depth, which is fine.
+
+Let's table these by plot, so that we can see if there are certain plots missing the 100 and 200 cm depth data.
+
+```{r}
+table(envr$depth, envr$Plot)
+```
+Okay, so it seems that plots 4 and 21 are are the ones with variation in 100 and 200 cm depths compared to others. interestingly, we also see that plot 10 has less observations than the others. However, our other data was only taken on two different dates. So as long as we have records for those dates, that should be fine.
+
+Those dates are 2021-06-23 and 2021-08-24. However, the dates in the environmental dataset are given as date of the year. 
+
+2021-06-23 is the 174th day of the year, and 2021-08-24 is the 236th day of the year. 
+
+```{r}
+envr <- subset(envr, Day_of_Year == 174 | Day_of_Year == 236)
+```
+
+Let's table by depth and plot. We should have 2 measurements, one for each day
+
+```{r}
+table(envr$depth, envr$Plot)
+```
+Ah, okay. There seems to be an effect of the "zone" variable- one measurement was recorded for each "zone" (corresponds to a different point on the temperature sensor). We will take measurements from zone A, as this is the "center" position of the soil probe.
+
+```{r}
+envr <- subset(envr, zone == "A")
+table(envr$depth, envr$Plot)
+```
+Great. That should suffice for now. 
+
+
+## qPCR
+
+Dataset download link: https://www.dropbox.com/scl/fo/8wspfe6m1o5efsgu38t7t/h/SPRUCE_qPCR_copy_numbers_2021.csv?dl=0
+
+Data source with metadata: https://mnspruce.ornl.gov/datasets/spruce-quantitative-pcr-qpcr-of-microbial-gene-copy-numbers-2021-2022
+
+
+```{r}
+qpcr <- read.csv("./Data/Raw/SPRUCE_qPCR_copy_numbers_2021.csv")
+colnames(qpcr)
+```
+We really only care about the copies per gram dry weight. This corresponds to Bacteria_copy_dry and Archaea_copy_dry. Let's keep only these, and the details of the sampling location/date
+
+```{r}
+qpcr <- qpcr[,-c(13,15,16,17)]
+```
+
+Lastly, we will make a histogram of the Archaea_copy_dry and Bacteria_copy_dry to ensure we don't have outliers
+
+```{r}
+par(mfrow= c(1,2))
+hist(qpcr$Archaea_copy_dry)
+hist(qpcr$Bacteria_copy_dry)
+```
+
+These both seem okay, except for that there are two entries with the value at -9999, which is used in this dataset to represent an NA or some sort of error. Let's remove these entries
+
+```{r}
+qpcr <- subset(qpcr, Archaea_copy_dry >= 0 & Bacteria_copy_dry >= 0)
+```
+
+
+## Chloroform fumigation
+
+Dataset download link: https://www.dropbox.com/scl/fo/wtphig601emenlyjbph8f/h/SPRUCE_CFE_MBC_MBN_2021_2022.csv?dl=0
+
+Data source with metadata: https://mnspruce.ornl.gov/datasets/spruce-chloroform-fumigation-extraction-for-microbial-biomass-and-dissolved-organic-carbon
+
+```{r}
+chloroform <- read.csv("./Data/Raw/SPRUCE_CFE_MBC_MBN_2021_2022.csv")
+colnames(chloroform)
+```
+
+Here, we really only care about
+
+- DN_unfumigated_soil (this is a measure of total N without the N stored in microbial biomass)
+- MBN (microbial biomass nitrogen)
+- DOC_unfumigated_soil (this is a measure of total DOC without the OC stored in microbial biomass)
+- GWC: a measure of soil moisture
+
+Let's remove the other variables (except those describing the sampling location and time) from this dataset
+
+```{r}
+chloroform <- chloroform[, -c(5:8,10:12,14,16,17,19)]
+```
+
+# Merge dataframes
+## Formatting the envr dataset
+
+Merging the chloroform and qpcr dataframes won't be a big hassle, we just need to make sure that we are combining entries that have both the same date, plot, and depth. However, we have a bit more processing to do for the envr dataset, namely changing the dates and depths
+
+Let's start by changing the dates to the same format as the qpcr dataset. Recall that 2021-06-23 is the 174th day of the year, and 2021-08-24 is the 236th day of the year.
+
+```{r}
+envr$date <- NA
+
+for (i in 1:216){
+  if (envr$Day_of_Year[i] == 174){
+    envr$date[i] <- "2021-06-23"
+  }
+  else{
+    envr$date[i] <- "2021-08-24"
+  }
+}
+```
+
+Let's make a variable combining date and site
+
+```{r}
+envr$datesite <- paste(envr$date, envr$Plot)
+```
+
+Cool. Now to work on the depth
+
+Note that we have the following depth ranges for where qPCR and chloroform samples were taken
+
+```{r}
+unique(qpcr$Depth_range)
+```
+
+and temperature readings from these depths
+
+```{r}
+unique(envr$depth)
+```
+
+We don't have a one-to-one mapping between depth range of qpcr/chloroform measurements and the depth measurements. 
+
+There are three options I can take
+
+1. Average all of the temperatures, in order to get an estimate of the temperature at the midpoint (ex: average the measurements at 10 and 20 cm and report that as the value for the 10-20cm range): this could work, but there are a few issues, namely the 50-75, 75-100, 100-125, and 150-175 variables. 
+
+2. Assign the temperature at the top layer for all layers: Similarly to the previous method, the 75-100, and 150-175 variables wouldn't have a value. I feel like we've already cut a lot of data, and I'm not sure if I'm happy cutting more.
+
+3. A combination of 1 and 2: for the ranges where I can take the top layer measurement, I will use that, and for ranges where I cannot, I can take the average: this shoiuld work well, since I can assign:
+
+50-75: measurement at 50 cm
+
+75-100: average of 50cm and 100cm measurements
+
+100-125: measurement at 100cm
+
+150-175: average of 100cm and 200cm measurements.
+
+We can test the validity of this by taking the average of the measurements at 0 and 10 cm, and comparing those to the actual values taken at 5 cm.
+
+```{r}
+envr_ranges <- matrix(ncol = 3, nrow = 0)
+colnames(envr_ranges) <- c("datesite", "depth range", "temp")
+date_site_combos <- unique(envr$datesite)
+
+envr_0_10 <- subset(envr, depth == 1 | depth == 10)
+
+for (i in 1:24){
+  sub <- subset(envr_0_10, datesite == date_site_combos[i])
+  envr_ranges <- rbind(envr_ranges, c(date_site_combos[i], "0-10", mean(sub$value)))
+}
+
+envr_ranges<- as.data.frame(envr_ranges)
+```
+
+```{r}
+depth5 <- subset(envr, depth == 5)
+
+comparison <- inner_join(depth5, envr_ranges, by = "datesite")
+```
+
+```{r}
+plot(comparison$value, comparison$temp)
+
+summary(lm(comparison$temp~comparison$value))
+```
+
+I think that this is okay. We don't have a 1-to-1 relationship, but this is the best way to keep all our data while making the best guess we can make.
+
+Let's do this for the two depths that need it:
+
+```{r}
+envr_ranges <- matrix(ncol = 3, nrow = 0)
+colnames(envr_ranges) <- c("datesite", "depth", "temp")
+date_site_combos <- unique(envr$datesite)
+
+envr_50_100 <- subset(envr, depth == 50 | depth == 100)
+envr_100_200 <- subset(envr, depth == 100 | depth == 200)
+
+for (i in 1:24){
+  sub1 <- subset(envr_50_100, datesite == date_site_combos[i])
+  envr_ranges <- rbind(envr_ranges, c(date_site_combos[i], "75-100", mean(sub1$value)))
+  
+  sub2 <- subset(envr_100_200, datesite == date_site_combos[i])
+    envr_ranges <- rbind(envr_ranges, c(date_site_combos[i], "150-175", mean(sub2$value)))
+}
+
+envr_ranges<- as.data.frame(envr_ranges)
+```
+
+Cool. Lastly, we will add datesite data for other depths into the envr_ranges dataset to get something we can easily combine with the qPCR + chloroform datasets
+
+```{r}
+small_envr <- envr[,c(12, 9,7)]
+
+colnames(small_envr) <- c()
+```
+
+
+Let's make a variable that combines the date and plot number.
+
+```{r}
+chloroform$datesite <- paste(chloroform$Sample_date, chloroform$Plot)
+qpcr$datesite <- paste(qpcr$Sample_date, qpcr$Plot)
+```
+
+Now let's see what data overlaps between these datasets
+
+```{r}
+length(intersect(chloroform$datesite, qpcr$datesite))
+length(unique(qpcr$datesite))
+```
+
+Okay, so it seems that we are losing ~12 samples by including qPCR results. However, we are including the most data that we can, since that is equal to the entire qPCR dataset.
+
+Let's now make a variable that includes depth, site, and date. 
+
+If we take a look at our depth variables, we can see that it while in the chloroform dataset it gives different ranges with a dash separating the top and bottom of the soil layer (in cm) (ex: 0-10, 10-20) in the qpcr dataset, it gives the same range with an underscore (ex: 0_10, 10_20). Let's change this so that they match.
+
+```{r}
+qpcr$depth2 <- NA
+
+for (i in 1:214){
+  split <- str_split(qpcr$Depth_range[i],"_")
+  qpcr$depth2[i] <- paste0(split[[1]][1], "-", split[[1]][2])
+}
+```
+
+Now, let's make a variable that includes date, site, and depth to make merging these dataframes easier.
+
+```{r}
+chloroform$datesitedepth <- paste(chloroform$datesite, chloroform$Depth)
+qpcr$datesitedepth <- paste(qpcr$datesite, qpcr$depth2)
+```
+
+Again, we will check the data loss
+
+```{r}
+length(intersect(chloroform$datesitedepth, qpcr$datesitedepth))
+```
+
+This corresponds to the entire qpcr dataset, so we are losing the least data possible with the datasets we have.
+
+## Dealing with Replicates
+
+Our last issue is that we have replicates in the chloroform and moisture datasets, but not the qpcr datasets. Let's average these to get a single datapoint for each date, site, and depth
+
+```{r}
+temp <- unique(chloroform$datesitedepth)
+
+chloroform_means <- matrix(ncol = 6, nrow = length(temp))
+colnames(chloroform_means) <- c(colnames(chloroform)[5:9], "datesitedepth")
+
+for (i in 1:length(temp)){
+  sub <- subset(chloroform, datesitedepth == temp[i])
+  means <- colMeans(sub[, 5:9])
+  chloroform_means[i,6] <- temp[i]
+  for (j in 1:5){
+    chloroform_means[i,j] <- means[j]
+  }
+}
+```
+
+## Merging Chloroform and qPCR Datasets
+
+Finally, we will merge these datasets using inner_join() in the dplyr package. We will merge by our newly created "datesitedepth" variable.
+
+Let's first convert our chloroform matrix to a dataframe
+```{r}
+chloroform_means_2 <- as.data.frame(chloroform_means)
+```
+
+and combine!
+
+```{r}
+data <- inner_join(qpcr, chloroform_means_2, by = "datesitedepth")
+```
+
+Great! Now we have two of our datasets combined.
+
+
+
+## Data Processing
+
+It is important to note that some of our measurements are redundant, i.e. that they can be calculated from other measurements presented here.
+
+### Chloroform Dataset
+
+The important variables here are:
+
+- GWC: gravimetric water content
+
+- DN_unfumigated_soil: Dissolved Nitrogen of the soil
+- MBN: Microbial biomass nitrogen
+
+- DOC_unfumigated_soil: Dissolved organic carbon in the soil
+- MBC: Microbial biomass carbon
+
+Note importantly that these values will likely be correlated, since MBC is a part of the DOC pool (and similarly for MBN).
+
+### qPCR Dataset
+
+A lot of our important variables from this dataset of type "character". 
+
+```{r}
+data$MBC <- as.numeric(data$MBC)
+data$MBN <- as.numeric(data$MBN)
+data$GWC <- as.numeric(data$GWC)
+data$DOC_unfumigated_soil <- as.numeric(data$DOC_unfumigated_soil)
+data$DN_unfumigated_soil <- as.numeric(data$DN_unfumigated_soil)
+```
+
+
