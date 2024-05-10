@@ -773,6 +773,7 @@ Save this
 ```{r}
 # write.csv(spruce_log_scale,"./Data/Clean/complete_spruce_logged_scaled.csv",row.names = F)
 ```
+
 # Exploratory analysis
 
 
