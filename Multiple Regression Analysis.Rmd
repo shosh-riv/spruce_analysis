@@ -1,0 +1,146 @@
+---
+title: "Multiple Regression Analysis"
+author: "Autumn Pereira"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Prep
+
+Let's read in our data and load some packages
+
+```{r}
+library(MASS)
+library(ggplot2)
+library(car)
+
+d <- read.csv("complete_combined_spruce_data.csv")
+```
+
+And remove the ambient temperature treatments (based on observations from the exploratory data analysis) and omit any rows with NAs
+
+```{r}
+d <- subset(d, Temp_experimental != "Amb")
+d <- na.omit(d)
+```
+
+Let's also log-transform MBC, MBN, bacteria copy number and archaea copy number
+
+```{r}
+d$Bacteria_copy_dry <- log(d$Bacteria_copy_dry)
+d$Archaea_copy_dry <- log(d$Archaea_copy_dry)
+
+d$MBC <- log(d$MBC)
+d$MBN <- log(d$MBN)
+```
+
+and we will replace any negative infinity values with 0
+
+```{r}
+for (i in 1:177){
+  if (d$MBC[i] == -Inf){
+    d$MBC[i] <- 0
+  }
+  if (d$MBN[i] == -Inf){
+    d$MBN[i] <- 0
+  }
+}
+```
+
+
+We will make 2 smaller data frames containing only our predictors and response variable
+
+```{r}
+CO2 <- d[, c(4, 7:14)]
+temp <- d[, c(3,7:14)]
+```
+
+And we will code the CO2 variable as binary, where 1= elevated CO2 and 0 = ambient CO2
+
+```{r}
+CO2$CO2 <- NA
+
+for (i in 1:177){
+  if (CO2$CO2_treatment[i] == "E"){
+    CO2$CO2[i] = 1 }
+  else{
+   CO2$CO2[i] = 0 
+  }
+}
+
+CO2 <- CO2[, -c(1)]
+```
+
+## Multicollinearity Concerns
+
+We want to be sure that there is no multicollinearity in our data. From the correlation plots in the SEM file, it seems that all the correlations are < 0.6, so we will take these as not multicollinear enough for us to have a problem.
+
+## Modelling Experimental CO2
+
+We will fit a binomial GLM to the experimental CO2, and use stepwise AIC in both directions to select the most appropriate model.
+
+```{r}
+CO2_model <- glm(CO2 ~.,family=binomial(link='logit'),data=CO2)
+
+CO2_step_model <- stepAIC(CO2_model, direction = "backward")
+summary(CO2_step_model)
+
+final_CO2_model <- glm(formula = CO2 ~ Bacteria_copy_dry + GWC + temp, family = binomial(link = "logit"), data = CO2)
+```
+
+Great, so the best model allowing us to parse out our ambient and elevated CO2 treatments includes
+
+-Log bacterial copy number
+- Gravimetric water content
+- Temperature
+
+The assumptions of logistic regression that we haven't checked is that there is a linear relationship between logit(CO2) and our response variables. We can test this using a Box-Tidwell test
+
+```{r}
+CO2$logits <- final_CO2_model$linear.predictors
+```
+
+```{r}
+plot(logits, CO2$Bacteria_copy_dry)
+plot(logits, CO2$GWC)
+plot(logits, CO2$temp)
+```
+
+Although there is a lot of spread, there is prevalence of a linear relationship from these plots, so the model is valid.
+
+## Modelling Experimental Temperature
+
+Let's do the same for temperature. Here we will fit just a linear model since the temperatures are distributed linearly.
+
+From the plots in the SEM RSheet, it seems that the independent variables are more or less linearly related to experimental temperature, so that satisfies that concern.
+
+```{r}
+temp_model <- lm(Temp_experimental ~., data = temp)
+# Stepwise regression model
+temp_step_model <- stepAIC(temp_model, direction = "backward", 
+                      trace = TRUE)
+summary(temp_step_model)
+```
+
+Great! So the best model in this case includes
+
+- log bacteria copy number
+- archaea copy number
+- gravimetric water content
+- dissolved nitrogen
+- microbial biomass nitrogen
+- dissolved organic carbon
+- temperature
+
+Let's look at the model assumptions
+
+```{r}
+plot(lm(formula = Temp_experimental ~ Bacteria_copy_dry + Archaea_copy_dry + 
+    GWC + DN_unfumigated_soil + MBN + DOC_unfumigated_soil + 
+    temp, data = temp))
+```
+The residuals vs fitted do look a bit odd, possibly because while our response variable takes values linearly distributed betweeen [0,9], it is categorical. Otherwise, the plots look acceptable. Otherwise, this follows the model assumptions quite well.
