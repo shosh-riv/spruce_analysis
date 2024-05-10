@@ -34,21 +34,8 @@ Let's also log-transform MBC, MBN, bacteria copy number and archaea copy number
 d$Bacteria_copy_dry <- log(d$Bacteria_copy_dry)
 d$Archaea_copy_dry <- log(d$Archaea_copy_dry)
 
-d$MBC <- log(d$MBC)
-d$MBN <- log(d$MBN)
-```
-
-and we will replace any negative infinity values with 0
-
-```{r}
-for (i in 1:177){
-  if (d$MBC[i] == -Inf){
-    d$MBC[i] <- 0
-  }
-  if (d$MBN[i] == -Inf){
-    d$MBN[i] <- 0
-  }
-}
+d$MBC <- log(d$MBC+1)
+d$MBN <- log(d$MBN+1)
 ```
 
 
@@ -105,9 +92,9 @@ CO2$logits <- final_CO2_model$linear.predictors
 ```
 
 ```{r}
-plot(logits, CO2$Bacteria_copy_dry)
-plot(logits, CO2$GWC)
-plot(logits, CO2$temp)
+plot(CO2$logits, CO2$Bacteria_copy_dry)
+plot(CO2$logits, CO2$GWC)
+plot(CO2$logits, CO2$temp)
 ```
 
 Although there is a lot of spread, there is prevalence of a linear relationship from these plots, so the model is valid.
