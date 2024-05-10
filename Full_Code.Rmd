@@ -502,9 +502,41 @@ Cool. Lastly, we will add datesite data for other depths into the envr_ranges da
 ```{r}
 small_envr <- envr[,c(12, 9,7)]
 
-colnames(small_envr) <- c()
+colnames(small_envr) <- c("datesite", "depth", "temp")
+
+complete_envr_small <- rbind(small_envr, envr_ranges)
+complete_envr_small <- subset(complete_envr_small, depth != 5 & depth != 200)
 ```
 
+```{r}
+for (i in 1:216){
+  if (complete_envr_small$depth[i] == 1){
+    complete_envr_small$depth[i] <- "0-10"
+  }
+  else if (complete_envr_small$depth[i] == 10){
+    complete_envr_small$depth[i] <- "10-20"  
+  }
+  else if (complete_envr_small$depth[i] == 20){
+    complete_envr_small$depth[i] <- "20-30"
+  }
+  else if (complete_envr_small$depth[i] == 30){
+    complete_envr_small$depth[i] <- "30-40"  
+  }
+  else if (complete_envr_small$depth[i] == 40){
+    complete_envr_small$depth[i] <- "40-50"
+  }
+  else if (complete_envr_small$depth[i] == 50){
+   complete_envr_small$depth[i] <- "50-75" 
+  }
+  else if (complete_envr_small$depth[i] == 100){
+   complete_envr_small$depth[i] <- "100-125" 
+  }
+}
+```
+
+Cool! Let's move onto the other datasets
+
+### Processing qPCR and Chloroform Datasets
 
 Let's make a variable that combines the date and plot number.
 
@@ -540,6 +572,7 @@ Now, let's make a variable that includes date, site, and depth to make merging t
 ```{r}
 chloroform$datesitedepth <- paste(chloroform$datesite, chloroform$Depth)
 qpcr$datesitedepth <- paste(qpcr$datesite, qpcr$depth2)
+complete_envr_small$datesitedepth <- paste(complete_envr_small$datesite, complete_envr_small$depth)
 ```
 
 Again, we will check the data loss
@@ -555,6 +588,9 @@ This corresponds to the entire qpcr dataset, so we are losing the least data pos
 Our last issue is that we have replicates in the chloroform and moisture datasets, but not the qpcr datasets. Let's average these to get a single datapoint for each date, site, and depth
 
 ```{r}
+# i know there is probably a better way to do this but since we have only a few 
+# entries i will do it in a computation-intensive way since it is more 
+#straightforward
 temp <- unique(chloroform$datesitedepth)
 
 chloroform_means <- matrix(ncol = 6, nrow = length(temp))
@@ -582,41 +618,42 @@ chloroform_means_2 <- as.data.frame(chloroform_means)
 and combine!
 
 ```{r}
-data <- inner_join(qpcr, chloroform_means_2, by = "datesitedepth")
+data_pre <- inner_join(qpcr, chloroform_means_2, by = "datesitedepth")
+data <- inner_join(data_pre, complete_envr_small, by = "datesitedepth")
 ```
 
-Great! Now we have two of our datasets combined.
+Great! Now we have all of our datasets combined.
 
-
-
-## Data Processing
-
-It is important to note that some of our measurements are redundant, i.e. that they can be calculated from other measurements presented here.
-
-### Chloroform Dataset
-
-The important variables here are:
-
-- GWC: gravimetric water content
-
-- DN_unfumigated_soil: Dissolved Nitrogen of the soil
-- MBN: Microbial biomass nitrogen
-
-- DOC_unfumigated_soil: Dissolved organic carbon in the soil
-- MBC: Microbial biomass carbon
-
-Note importantly that these values will likely be correlated, since MBC is a part of the DOC pool (and similarly for MBN).
-
-### qPCR Dataset
-
-A lot of our important variables from this dataset of type "character". 
+Finally, we will remove redundant variables from the site descriptors, to keep only date, plot, depth, temp experimental, and CO2_treatment, and the measured variables that we care about (described above)
 
 ```{r}
-data$MBC <- as.numeric(data$MBC)
-data$MBN <- as.numeric(data$MBN)
-data$GWC <- as.numeric(data$GWC)
-data$DOC_unfumigated_soil <- as.numeric(data$DOC_unfumigated_soil)
-data$DN_unfumigated_soil <- as.numeric(data$DN_unfumigated_soil)
+colnames(data)
 ```
+```{r}
+data <- data[, -c(1,2,4:7,10,14,22,23)]
+```
+
+Nice! Let's also rearrange the data rows so they're a bit nicer
+
+```{r}
+data <- data[, c(1:4,7,8,5,6,9:14)]
+```
+
+Finally, let's add precipitation back in
+```{r}
+# Convert day of year to date
+env_data_daily$Sample_date <- as.character(as.Date(env_data_daily$Day_of_Year,origin="2020-12-31"))
+
+# Grab precip data
+data <- merge(data,env_data_daily[,c("Sample_date","Plot","PREC_6")],
+                 by=c("Sample_date","Plot"),all.x=T,all.y=F)
+```
+
+and write to csv
+
+```{r}
+#write.csv(data,"complete_combined_spruce_data.csv" )
+```
+
 
 
