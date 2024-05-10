@@ -236,18 +236,44 @@ colnames(spruce_log_scale)[to_scale]
 spruce_log_scale[,to_scale] <- scale(spruce_log_scale[,to_scale])
 
 ### Covariance matrix with log-transformed scaled data
-GGally::ggpairs(subset(spruce_log_scale,
+
+# Column names for better legibility
+vars <- c("Exp.\ntemp.","Bacteria","Archaea","GWC","DN","MBN","DOC","MBC",
+          "Soil\ntemp.","Precip.")
+
+# Covariance matrix
+library(GGally)
+log_cov_plot <- GGally::ggpairs(subset(spruce_log_scale,
                        select = -c(Sample_date,Plot,datesitedepth,CO2_treatment,depth2)),
-                lower=list(continuous="smooth_lm")) + theme_light()
+                lower=list(continuous="smooth_lm"),
+                columnLabels = vars,
+                upper = list(continuous = wrap("cor", size = 8.5))) + 
+  theme_light(base_size = 18) +
+  theme(strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
 ggsave("C:/Users/linne/Documents/School/Cornell/MultivariateAnalysis/FinalProject/spruce_analysis/Plots/cov_matrix_logscale.png",
-       width=5000,height=3000,units="px")
+       width=6300,height=3300,units="px")
 
 ### Redo covariance matrix with comparable original data
-GGally::ggpairs(subset(spruce_noAmb,
-                       select = -c(Sample_date,Plot,datesitedepth,CO2_treatment,depth2)),
-                lower=list(continuous="smooth_lm")) + theme_light()
+cov_plot <- GGally::ggpairs(subset(spruce_noAmb,
+                                   select = -c(Sample_date,Plot,datesitedepth,CO2_treatment,depth2)),
+                            lower=list(continuous="smooth_lm"),
+                            columnLabels = vars,
+                            upper = list(continuous = wrap("cor", size = 8.5))) + 
+  theme_light(base_size = 18) +
+  theme(strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
 ggsave("C:/Users/linne/Documents/School/Cornell/MultivariateAnalysis/FinalProject/spruce_analysis/Plots/cov_matrix_noAmb.png",
-       width=5000,height=3000,units="px")
+       width=6300,height=3300,units="px")
+
+# Combine both into one figure for paper
+library(cowplot)
+fig_covplot <- cowplot::plot_grid(ggmatrix_gtable(cov_plot),
+                   ggmatrix_gtable(log_cov_plot),
+                   nrow=2,labels=c("(A)","(B)"),label_size=18)
+ggsave("C:/Users/linne/Documents/School/Cornell/MultivariateAnalysis/FinalProject/spruce_analysis/Plots/figure_covariance_matrix.png",
+       fig_covplot,width=7000,height=7200,units="px")
+
 
 #### Piecewise structural Equation Modeling ####
 library(piecewiseSEM)
