@@ -30,7 +30,7 @@ There is a separate file for each plot, all downloaded into one folder. Because 
 First read in the files.
 ```{r}
 # Vector of all files
-env_filenames <- list.files("./Data/Raw/WEW_Complete_Environ_20220518/",full.names = T)
+env_filenames <- list.files("../Data/Raw/WEW_Complete_Environ_20220518/",full.names = T)
 
 # Read in all as single list object
 env_data_list <- lapply(env_filenames,read.csv)
@@ -770,6 +770,7 @@ library(GGally)
 ggpairs(subset(spruce, select = -c(Sample_date,Plot,datesitedepth,Temp_experimental,CO2_treatment,depth2)),
                 lower=list(continuous="smooth_lm")) + theme_light()
 ```
+
 Looks like there's quite an outlier in MBN. Let's see what it looks like if we limit MBN to values under 100.
 
 ```{r}
@@ -777,6 +778,7 @@ ggpairs(subset(spruce, MBN < 100,
                        select = -c(Sample_date,Plot,datesitedepth,Temp_experimental,CO2_treatment,depth2)),
                 lower=list(continuous="smooth_lm")) + theme_light()
 ```
+
 That makes it way better.
 
 We also saw above that there are some negative values in MBN and MBC. This is physically impossible. Looking at the dataset description we see that due to "heterogeneity between the two replicate samples" used to calculate MBN and MBC, there are a few negative values. Since negative values are nonsensical, we'll change these to 0 to reflect that they have a very small microbial biomass.
@@ -1148,6 +1150,7 @@ BCN_lm <- lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + te
              data=spruce_log_scale, na.action=na.omit)
 plot(BCN_lm)
 ```
+
 The bacteria copy number is already log transformed, and it looks good. Points 108 and 135 are on the edge of being outliers, but we don't have methodological knowledge (such as those particular measurements being messed up on that particular day) to justify removing them, so we'll leave them alone.
 
 Archaea copy number 
@@ -1157,6 +1160,7 @@ ACN_lm <- lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + tem
              data=spruce_log_scale, na.action=na.omit)
 plot(ACN_lm)
 ```
+
 Archaeal copy number is also already log transformed. I'm satisfied with how it looks.
 
 Microbial biomass nitrogen
@@ -1183,9 +1187,7 @@ The platonic ideal of a Q-Q plot. MBC is also already log transformed and it loo
 
 Now that we're satisfied that all model assumptions are met, we can perform the acutal SEM.
 
-Note that the 
-
-```{r}
+```{r, R.options = list(width = 150)}
 library(piecewiseSEM)
 
 spruce_psem <- psem(
@@ -1216,7 +1218,7 @@ Fisher's C and the chi-squared tests tell us that this model does not fit. Based
 
 MBN and MBC could both have significant relationships with depth and experimental temperature. We expected these relationships to be primarily indirect, i.e. mediated by intermediate variables, within the SEM, but it looks like the direct relationships between these variables are also important. This makes biological sense so I'll add them in.
 
-```{r}
+```{r, R.options = list(width = 150)}
 spruce_psem <- update(spruce_psem,
        MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental_num,
        MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental_num)
@@ -1226,7 +1228,7 @@ suppressWarnings(summary(spruce_psem, .progressBar = FALSE))
 The model itself still doesn't fit, but the R-squareds for MBN and MBC are much higher now! We still have 8 relationships remaining that we could add, so let's take another look at the d-sep tests. It looks like DOC and DN could be significantly affected by soil temperature. I'm willing to believe this could be the case, so I'll add it into my model.
 
 
-```{r}
+```{r, R.options = list(width = 150)}
 spruce_psem <- update(spruce_psem,
                       DOC_unfumigated_soil ~ depth2 + Temp_experimental_num + CO2_treatment + temp,
                       DN_unfumigated_soil ~ depth2 + Temp_experimental_num + temp)
@@ -1350,7 +1352,7 @@ spruce_num_psem <- psem(
 
 Out of curiosity, let's see if this performs any better than the SEM that had some categorical data.
 
-```{r}
+```{r, R.options = list(width = 150)}
 suppressWarnings(summary(spruce_num_psem, .progressBar = FALSE))
 suppressWarnings(summary(spruce_num_psem, .progressBar = FALSE)$R2)
 suppressWarnings(summary(spruce_psem, .progressBar = FALSE)$R2)
@@ -1359,7 +1361,6 @@ suppressWarnings(summary(spruce_psem, .progressBar = FALSE)$R2)
 In fact, this is worse than the categorical SEM for explaining all endogenous variables. Let's compare AICs.
 
 ```{r}
-# Compare AICs:
 AIC_psem(spruce_psem)
 AIC_psem(spruce_num_psem)
 ```
