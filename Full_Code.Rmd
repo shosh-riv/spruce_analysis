@@ -775,8 +775,224 @@ Save this
 ```
 
 # Exploratory analysis
+## ANOVAs
+
+The bulk of our exploratory analysis was done in the Shiny app. Below is the base R code we based the Shiny app on, as a worked example of how the code functions. For testing, we used microbial biomass nitrogen (MBN) as the predicted variable and depth and experimental temperature as explanatory variables in a two-way ANOVA with interaction effects.
+
+Replace dash with underscore in depth ranges so the names don't confuse the modeling
+```{r}
+spruce$depth2 <- gsub("-","_",spruce$depth2)
+```
+
+Select variable for ANOVA
+```{r}
+lhs <- "MBN"
+```
+
+Select explanatory variable(s)
+```{r}
+x_axis <- "depth2"
+fill_var <- "Temp_experimental"
+```
+
+We want to log-transform the variables that need it, but we don't want to use the scaled values, so we'll just perform the log transformation here.
+```{r}
+# Initialize dataframe for log values
+spruce_log <- spruce
+
+# Check for 0s
+apply(spruce_log[,to_transform],2,FUN=min,na.rm=T)
+
+# Add 1 to MBC and MBN because they include 0
+spruce_log$MBN <- spruce_log$MBN + 1
+spruce_log$MBC <- spruce_log$MBC + 1
+
+# Transform
+spruce_log[,to_transform] <- log(spruce_log[,to_transform])
+```
+
+Now we'll run the ANOVA.
+```{r}
+# Create formula
+aov_formula <- paste0(lhs,"~",paste(x_axis,fill_var,sep ="*"))
+
+# Run ANOVA
+aov_object <- aov(formula(aov_formula), data=spruce_log)
+summary(aov_object)
+```
+
+We'll also run a TukeyHSD test to see what levels are significantly different from one another.
+```{r}
+tukey <- TukeyHSD(aov_object)
+tukey
+```
+
+## Boxplots
+
+Now we'll make our boxplot. We'll want to use letters to designate what's significantly different from each other, so let's first extract the p-values from the TukeyHSD test.
+```{r}
+tukey_p <- lapply(tukey,FUN=function(x){
+  y <- x[,4]
+  names(y) <- rownames(x)
+  return(y)
+})
+```
+
+We'll get the letter assignments from the p-values using the multcompView library. Since we have a two-way ANOVA, one of which is on the x-axis and one of which dictates the color, we have to variables we need to assign letters for. One goes on the x-axis. We'll add the letters for the color-coding variable to the legend, to keep things legible.
+```{r}
+library(multcompView)
+x_letters <- multcompLetters(tukey_p[[x_axis]])$Letters
+x_letters <- data.frame(level = names(x_letters),letter = x_letters)
+
+fill_letters <- multcompLetters(tukey_p[[fill_var]])$Letters
+
+for_legend <- paste(names(fill_letters)," (",fill_letters,")",sep="")
+names(for_legend) <- names(fill_letters)
+
+```
+
+We also checked for interactions between variables. There are too many levels to depict these on the boxplots, so if there are interactions, we'll print them as a separate table.
+
+First, we have a failsafe to make sure we're only checking for interactions in cases where we ran a model with interactions.
+```{r}
+int_exists <- tryCatch(
+  expr = (length(tukey[[3]]) > -1),
+  error = function(e) {
+    return(F)
+  }
+)
+```
+
+Next, if we ran a model with interactions, we'll check to see if there were any significant interactions.
+```{r}
+if (int_exists) {
+  int <- which(tukey_p[[3]] < 0.05)
+}
+```
+
+Finally, if there were any significant interactions, print them as a table
+```{r}
+if(length(int) > 0){
+  interaction_table <- tukey[[3]][int,]
+  interaction_table <- knitr::kable(interaction_table,
+                                    colnames=c("Comparison","Difference","Lower","Upper","Adjusted p-value"))
+}
+```
+
+Now we can make a boxplot.
+```{r}
+library(ggplot2)
+ggplot(data=spruce_log)+
+  geom_boxplot(aes(x=.data[[x_axis]],y=.data[[lhs]],fill=.data[[fill_var]]))+
+  theme_classic() +
+  geom_text(data=x_letters,aes(x=level,y=(max(spruce_log[[lhs]])+max(spruce_log[[lhs]])/10)),label=x_letters$letter) +
+  scale_fill_discrete(labels=for_legend)
 
 
-## Covariance matrix
+```
 
+
+# Multiple Regression
+
+We will perform two multiple regressions. We will try to use the full suite of measured variables to predict what treatment each observation was taken from. In other words, we will try to recover the CO2 treatment and the temperature treatment from the observed data. We will perform one regression for CO2 treatment and one regression for temperature treatment.
+
+
+We saw in the covariance matrices that none of the variables have a correlation coefficient above 0.6, so we are not concerned about multicolinearity.
+
+First load the libraries necessary.
+```{r}
+library(MASS)
+library(ggplot2)
+library(car)
+```
+
+
+## CO2 Treatments
+
+We will make 2 smaller data frames containing only our predictors and response variable
+
+```{r}
+CO2 <- d[, c(4, 7:14)]
+temp <- d[, c(3,7:14)]
+```
+
+And we will code the CO2 variable as binary, where 1= elevated CO2 and 0 = ambient CO2
+
+```{r}
+CO2$CO2 <- NA
+
+for (i in 1:177){
+  if (CO2$CO2_treatment[i] == "E"){
+    CO2$CO2[i] = 1 }
+  else{
+   CO2$CO2[i] = 0 
+  }
+}
+
+CO2 <- CO2[, -c(1)]
+```
+
+We will fit a binomial GLM to the experimental CO2, and use stepwise AIC in both directions to select the most appropriate model.
+
+```{r}
+CO2_model <- glm(CO2 ~.,family=binomial(link='logit'),data=CO2)
+
+CO2_step_model <- stepAIC(CO2_model, direction = "backward")
+summary(CO2_step_model)
+
+final_CO2_model <- glm(formula = CO2 ~ Bacteria_copy_dry + GWC + temp, family = binomial(link = "logit"), data = CO2)
+```
+
+Great, so the best model allowing us to parse out our ambient and elevated CO2 treatments includes
+
+-Log bacterial copy number
+- Gravimetric water content
+- Temperature
+
+The assumptions of logistic regression that we haven't checked is that there is a linear relationship between logit(CO2) and our response variables. We can test this using a Box-Tidwell test.
+
+```{r}
+CO2$logits <- final_CO2_model$linear.predictors
+```
+
+```{r}
+plot(CO2$logits, CO2$Bacteria_copy_dry)
+plot(CO2$logits, CO2$GWC)
+plot(CO2$logits, CO2$temp)
+```
+
+Although there is a lot of spread, there is prevalence of a linear relationship from these plots, so the model is valid.
+
+## Temperature treatments
+
+Let's do the same for temperature. Here we will fit just a linear model since the temperatures are distributed linearly.
+
+Based on the regression plots in the lower triangle of the covariance matrices, it seems that the independent variables are more or less linearly related to experimental temperature, so that satisfies that concern.
+
+```{r}
+temp_model <- lm(Temp_experimental ~., data = temp)
+# Stepwise regression model
+temp_step_model <- stepAIC(temp_model, direction = "backward", 
+                      trace = TRUE)
+summary(temp_step_model)
+```
+
+Great! So the best model in this case includes
+
+- log bacteria copy number
+- archaea copy number
+- gravimetric water content
+- dissolved nitrogen
+- microbial biomass nitrogen
+- dissolved organic carbon
+- temperature
+
+Let's look at the model assumptions
+
+```{r}
+plot(lm(formula = Temp_experimental ~ Bacteria_copy_dry + Archaea_copy_dry + 
+    GWC + DN_unfumigated_soil + MBN + DOC_unfumigated_soil + 
+    temp, data = temp))
+```
+The residuals vs fitted do look a bit odd, possibly because while our response variable takes values linearly distributed betweeen [0,9], it is categorical. Otherwise, the plots look acceptable. Otherwise, this follows the model assumptions quite well.
 
