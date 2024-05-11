@@ -8,6 +8,7 @@ output:
     toc_depth: 3
     toc_float: true
     number_sections: true
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -18,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Environmental data
 Downloaded from here: https://www.dropbox.com/scl/fo/o9zh9o3smmjg54l20aj2r/AEb8Unqsj0rJzAb24WRBDQA/WEW_Complete_Environ_20240328?rlkey=bg4byw9cebb6m2fjvoymlioyt&dl=0
+
 Metadata available here: https://mnspruce.ornl.gov/datasets/spruce-whole-ecosystems-warming-wew-environmental-data-beginning-august-2015
 
 These data were taken every half hour, every day, in each plot.
@@ -46,7 +48,6 @@ for(i in 1:length(env_data_list)){
 
 Now we'll do some basic checks that all dataframes have the same structure, and then combine them into a single dataframe.
 ```{r}
-## Check that all datasets have the same column names
 # Column names of first dataset
 plot4_env_cols <- colnames(env_data_list$PLOT_04)
 
@@ -58,27 +59,42 @@ lapply(env_data_list[-1],FUN=function(x){
     print(which(colnames(x)!=plot4_env_cols))
   }
 })
-# All datasets have the same columns!
+```
 
-## Limit to just the year 2021 for all data (do this before combining into one DF
-## to avoid having a ridiculously large DF)
+All datasets have the same columns!
+
+Limit to just the year 2021 for all data (do this before combining into one DF to avoid having a ridiculously large DF)
+
+```{r}
 env_data_list_2021 <- lapply(env_data_list,FUN=function(x){
   return(x[x$Year==2021,])
 })
 
 # Check that the data was really reduced to only 2021
 lapply(env_data_list_2021,FUN=function(x)unique(x$Year))
+```
 
+What are the dimensions of each dataset?
+
+```{r}
 # What's the dimensions of each dataset?
 lapply(env_data_list_2021,FUN=dim)
-# Each plot has 17,520 observations for the year 2021, which is correct:
-48*365 # 48 observations per day, 365 days per year
-
-## Combine into one dataframe
-env_data <- data.table::rbindlist(env_data_list_2021)
-
 ```
+
+Each plot has 17,520 observations for the year 2021, which is correct (48 observations per day, 365 days per year):
+
+```{r}
+48*365
+```
+
+Combine into one dataframe
+
+```{r}
+env_data <- data.table::rbindlist(env_data_list_2021)
+```
+
 Now let's check for irregularities in the data.
+
 ```{r}
 summary(env_data)
 ```
@@ -91,7 +107,11 @@ Are the NAs mostly in the same rows? This could indicate equipment failures on s
 row_nas <- rowSums(is.na(env_data))
 summary(row_nas)
 hist(row_nas)
-# Impossible to get a good look from this histogram. Narrow down to 0-20
+```
+
+Impossible to get a good look from this histogram. Narrow down to 0-20
+
+```{r}
 hist(row_nas,breaks=c(seq(0,20,1),length(row_nas)),xlim=c(0,20))
 ```
 
@@ -101,15 +121,22 @@ row_nas <- row_nas[row_nas>0]
 summary(row_nas)
 hist(row_nas)
 hist(row_nas,breaks=c(seq(0,91,1)))
-# Looks like most rows that have NAs only have 1, and almost all have fewer than 5.
+```
+
+Looks like most rows that have NAs only have 1, and almost all have fewer than 5.
+
+```{r}
 sum(row_nas == 91); sum(row_nas>50); sum(row_nas>20)
-# 269 rows have 91 NAs; 471 more than 50; 491 more than 20.
+```
+
+269 rows have 91 NAs; 471 more than 50; 491 more than 20.
+
+```{r}
 sum(row_nas < 20); sum(row_nas==1)
 ```
-By contrast, 46,993 rows have fewer than 20 NAs; of these, 40,672 rows have
-only 1 NA. So no, the NAs are not mostly the same rows. However, this is probably
-because PREC_6 has so many more NAs than any other column. What happens if we
-do the same thing with PREC_6 removed?
+
+By contrast, 46,993 rows have fewer than 20 NAs; of these, 40,672 rows have only 1 NA. So no, the NAs are not mostly the same rows. However, this is probably because PREC_6 has so many more NAs than any other column. What happens if we do the same thing with PREC_6 removed?
+
 ```{r}
 row_nas_nop <- rowSums(is.na(as.data.frame(env_data)[,c(which(colnames(env_data)!="PREC_6"))]))
 summary(row_nas_nop)
@@ -118,43 +145,73 @@ row_nas_nop <- row_nas_nop[row_nas_nop>0]
 summary(row_nas_nop)
 hist(row_nas_nop,seq(1,max(row_nas_nop),1))
 ```
-No, the vast majority are still singlet NAs. No further action needed - there are
-more than enough datapoints in each variable to make scattered individual NAs
-unimportant. Rows with more NAs are so rare as to be unimportant as well.
+
+No, the vast majority are still singlet NAs. No further action needed - there are more than enough datapoints in each variable to make scattered individual NAs unimportant. Rows with more NAs are so rare as to be unimportant as well.
 
 Now we'll check the data types of the different columns.
-```{r}
-## Year.Fraction, WS_10, PAR_2, and plot_number should all be numeric.
-# Year.Fraction
-head(env_data$Year.Fraction) # no immediately visible reason to not be numeric
-test <- as.numeric(env_data$Year.Fraction)
-sum(is.na(test)) # no NAs ==> no incorrect conversions from character to numeric
-env_data$Year.Fraction <- as.numeric(env_data$Year.Fraction)
 
-# WS_10
+Year.Fraction, WS_10, PAR_2, and plot_number should all be numeric.
+
+Year.Fraction
+
+```{r}
+head(env_data$Year.Fraction)
+```
+
+no immediately visible reason to not be numeric
+
+```{r}
+test <- as.numeric(env_data$Year.Fraction)
+sum(is.na(test))
+```
+
+no NAs ==> no incorrect conversions from character to numeric. Convert to numeric
+```{r}
+env_data$Year.Fraction <- as.numeric(env_data$Year.Fraction)
+```
+
+WS_10
+
+```{r}
 head(env_data$WS_10,50)
 test <- as.numeric(env_data$WS_10)
 sum(is.na(test))==sum(is.na(env_data$WS_10))
-# Which columns became NA when converting to numeric?
+```
+
+Which columns became NA when converting to numeric?
+
+```{r}
 bad <- which(is.na(test) & !is.na(env_data$WS_10))
 unique(env_data[bad,"WS_10"])
-# They're all just empty. It's correct to convert them to NA so we can make the conversion.
-env_data$WS_10 <- as.numeric(env_data$WS_10)
+```
+They're all just empty. It's correct to convert them to NA so we can make the conversion.
 
-# PAR_2
+```{r}
+env_data$WS_10 <- as.numeric(env_data$WS_10)
+```
+
+PAR_2
+
+```{r}
 head(env_data$PAR_2,50)
 test <- as.numeric(env_data$PAR_2)
 sum(is.na(test))==sum(is.na(env_data$PAR_2))
 bad <- which(is.na(test) & !is.na(env_data$PAR_2))
 unique(env_data[bad,"PAR_2"])
-# It looks like entries in the 1000s were sometimes written with a comma, causing
-# them to register as character and not convert to numeric. Remove all commas
-# in the column and then convert to numeric
+```
+
+It looks like entries in the 1000s were sometimes written with a comma, causing them to register as character and not convert to numeric. Remove all commas in the column and then convert to numeric
+
+```{r}
 test<-env_data$PAR_2
 test2<-gsub(",","",test)
 test3 <- as.numeric(test2)
-sum(is.na(test3))==sum(is.na(test)) # Confirm the commas were the only problem
+sum(is.na(test3))==sum(is.na(test))
+```
 
+Confirm the commas were the only problem
+
+```{r}
 env_data$PAR_2 <- gsub(",","",env_data$PAR_2)
 env_data$PAR_2 <- as.numeric(env_data$PAR_2)
 
@@ -163,76 +220,102 @@ env_data$PAR_2 <- as.numeric(env_data$PAR_2)
 
 ### Daily environmental data
 Currently, we have the environmental data for every half hour of the whole year. Our response datasets contain data at a temporal resolution of 1 day, so we'll take daily averages of the environmental data.
+
+Rename dataframe for clarity, make dataframe (was data.table)
+
 ```{r}
-# Rename dataframe for clarity, make dataframe (was data.table)
 env_data_full <- data.frame(env_data)
+```
 
-# Names of columns that remain relevant with daily data (timestamp, etc. become 
-# unnecessary) and environmental data except for precipitation
+Names of columns that remain relevant with daily data (timestamp, etc. become unnecessary) and environmental data except for precipitation
+
+```{r}
 daily_cols <- colnames(env_data_full)[c(1,6,8:(ncol(env_data_full)-2))]
+```
 
-# Sum up precipitation by day and plot
+Sum up precipitation by day and plot
+
+```{r}
 daily_precip <- aggregate(env_data_full[,"PREC_6"],
                             by=list(env_data_full$Day_of_Year,
                                     env_data_full$Plot),
                             FUN = sum,na.rm=T)
 colnames(daily_precip) <- c("Day_of_Year","Plot","PREC_6")
+```
 
-# Aggregate the other data by averaging over day and plot, removing NAs from the calculations
+Aggregate the other data by averaging over day and plot, removing NAs from the calculations
+
+```{r}
 env_data_daily <- aggregate(env_data_full[,daily_cols],
                             by=list(env_data_full$Day_of_Year,
                                     env_data_full$Plot),
                             FUN = mean,na.rm=T)
-
-# Group.1 and Group.2 are extraneous - they are the same as Day_of_Year and Plot
-# Confirm this
-sum(env_data_daily$Group.1==env_data_daily$Day_of_Year) == nrow(env_data_daily)
-sum(env_data_daily$Group.2==env_data_daily$Plot) == nrow(env_data_daily)
-
-# Remove columns
-env_data_daily$Group.1 <- NULL
-env_data_daily$Group.2 <- NULL
-
-# Merge this with the precip data
-env_data_daily <- merge(env_data_daily,daily_precip,by=c("Day_of_Year","Plot"))
-
-# Make sure this all worked the way we wanted it to
-table(env_data_daily$Plot)
-# Each of the 12 plots has 365 entries, one for every day of the year. This is correct
 ```
 
-We'll now do some checks on missing data in this aggregated environmental dataset.
-```{r}
-# Check overall structure of new dataset
-summary(env_data_daily)
+Group.1 and Group.2 should be extraneous - they are the same as Day_of_Year and Plot. Let's confirm this quickly.
 
-# Quite a few columns have 2 NAs -- assume this is a complete lack of data for that
-# column on that day, but check in larger dataset to make sure
+```{r}
+sum(env_data_daily$Group.1==env_data_daily$Day_of_Year) == nrow(env_data_daily)
+sum(env_data_daily$Group.2==env_data_daily$Plot) == nrow(env_data_daily)
+```
+Yes, it's fine to remove those columns.
+
+```{r}
+env_data_daily$Group.1 <- NULL
+env_data_daily$Group.2 <- NULL
+```
+
+Now we can merge this with the precipitation data.
+
+```{r}
+env_data_daily <- merge(env_data_daily,daily_precip,by=c("Day_of_Year","Plot"))
+```
+
+Let's make sure this all worked the way we wanted it to.
+
+```{r}
+table(env_data_daily$Plot)
+```
+Each of the 12 plots has 365 entries, one for every day of the year. This is correct.
+
+
+We'll now do some checks on missing data in this aggregated environmental dataset. First, we'll check the overall structure of the new dataset.
+
+```{r}
+summary(env_data_daily)
+```
+
+Quite a few columns have 2 NAs -- assume this is a complete lack of data for that column on that day, but check in larger dataset to make sure.
+
+```{r}
 env_data_daily[which(is.na(env_data_daily$TS_0__A1)),c("Day_of_Year","Plot")]
 env_data_full[which(env_data_full$Day_of_Year==226 &
                       env_data_full$Plot==10),"TS_0__A1"]
 env_data_full[which(env_data_full$Day_of_Year==227 &
                       env_data_full$Plot==10),"TS_0__A1"]
-# As expected -- all NAs. 
 ```
+
+As expected -- all NAs. 
 
 Some columns (TS_.100__A8, TS_.200__A9, TS_.200__C9) have around 40 NAs. These are also
 the ones that had thousands of NAs in the half-hourly dataset, so this isn't
 surprising and doesn't need to be investigated further.
 
+Save this daily data.
 ```{f}
-# Save this daily data.
 #write.csv(env_data_daily,"./Data/Clean/dailymean_environmental_data_2021.csv",row.names = F)
 ```
-This dataset and all others moving forward are included with the submission. We will comment out all calls to write.csv() so as not to overwrite anything, but include the calls nonetheless so that you can see the file names.
+This dataset and all others moving forward are included with the submission and on the GitHub in the folder "For_R_Markdown". We will comment out all calls to write.csv() so as not to overwrite anything, but include the calls nonetheless so that you can see the file names.
 
 Now that we have usable environmental data, we'll have a think about what we want to use for our analysis and whittle it down to those variables.
 
 ### Reduce environmental data
 
 
-(Note: the previous chunk was written by Linnea, the following by Autumn, with slightly different names for the dataframes, hence the inconsistencies.)
+(Note: the previous chunk was written by Linnea, the following by Autumn, with slightly different names for the dataframes, hence the changes to dataframe names.)
+
 Set up for the next chunk.
+
 ```{r}
 library(stringr)
 library(dplyr)
@@ -288,7 +371,7 @@ We have a few NAs in our dataset, which is from the measurements taken of the so
 envr <- na.omit(envr)
 ```
 
-Great ! The last thing to do is change the depth variable to a numeric
+Great! The last thing to do is change the depth variable to a numeric
 
 ```{r}
 envr$depth <- as.numeric(envr$depth)
@@ -307,6 +390,7 @@ Let's table these by plot, so that we can see if there are certain plots missing
 ```{r}
 table(envr$depth, envr$Plot)
 ```
+
 Okay, so it seems that plots 4 and 21 are are the ones with variation in 100 and 200 cm depths compared to others. interestingly, we also see that plot 10 has less observations than the others. However, our other data was only taken on two different dates. So as long as we have records for those dates, that should be fine.
 
 Those dates are 2021-06-23 and 2021-08-24. However, the dates in the environmental dataset are given as date of the year. 
@@ -388,7 +472,7 @@ chloroform <- chloroform[, -c(5:8,10:12,14,16,17,19)]
 ```
 
 # Merge dataframes
-## Formatting the envr dataset
+## Formatting the envrironmental dataset
 
 Merging the chloroform and qpcr dataframes won't be a big hassle, we just need to make sure that we are combining entries that have both the same date, plot, and depth. However, we have a bit more processing to do for the envr dataset, namely changing the dates and depths
 
@@ -588,9 +672,6 @@ This corresponds to the entire qpcr dataset, so we are losing the least data pos
 Our last issue is that we have replicates in the chloroform and moisture datasets, but not the qpcr datasets. Let's average these to get a single datapoint for each date, site, and depth
 
 ```{r}
-# i know there is probably a better way to do this but since we have only a few 
-# entries i will do it in a computation-intensive way since it is more 
-#straightforward
 temp <- unique(chloroform$datesitedepth)
 
 chloroform_means <- matrix(ncol = 6, nrow = length(temp))
@@ -659,7 +740,7 @@ and write to csv
 
 ## Covariance matrix
 
-Before we do any proper analyses, let's check the distributions and covariances of our variables. This will tell us if we need to transform any variables, and will also let us check for multicolinearity between variables.
+Before we do any proper analyses, let's check the distributions and covariances of our variables. This will tell us if we need to transform any variables, and will also let us check for multicollinearity between variables.
 
 Rename to descriptive DF name and investigate structure
 ```{r}
@@ -780,22 +861,26 @@ Save this
 The bulk of our exploratory analysis was done in the Shiny app. Below is the base R code we based the Shiny app on, as a worked example of how the code functions. For testing, we used microbial biomass nitrogen (MBN) as the predicted variable and depth and experimental temperature as explanatory variables in a two-way ANOVA with interaction effects.
 
 Replace dash with underscore in depth ranges so the names don't confuse the modeling
+
 ```{r}
 spruce$depth2 <- gsub("-","_",spruce$depth2)
 ```
 
 Select variable for ANOVA
+
 ```{r}
 lhs <- "MBN"
 ```
 
 Select explanatory variable(s)
+
 ```{r}
 x_axis <- "depth2"
 fill_var <- "Temp_experimental"
 ```
 
 We want to log-transform the variables that need it, but we don't want to use the scaled values, so we'll just perform the log transformation here.
+
 ```{r}
 # Initialize dataframe for log values
 spruce_log <- spruce
@@ -812,6 +897,7 @@ spruce_log[,to_transform] <- log(spruce_log[,to_transform])
 ```
 
 Now we'll run the ANOVA.
+
 ```{r}
 # Create formula
 aov_formula <- paste0(lhs,"~",paste(x_axis,fill_var,sep ="*"))
@@ -822,14 +908,15 @@ summary(aov_object)
 ```
 
 We'll also run a TukeyHSD test to see what levels are significantly different from one another.
+
 ```{r}
 tukey <- TukeyHSD(aov_object)
-tukey
 ```
 
 ## Boxplots
 
 Now we'll make our boxplot. We'll want to use letters to designate what's significantly different from each other, so let's first extract the p-values from the TukeyHSD test.
+
 ```{r}
 tukey_p <- lapply(tukey,FUN=function(x){
   y <- x[,4]
@@ -839,6 +926,7 @@ tukey_p <- lapply(tukey,FUN=function(x){
 ```
 
 We'll get the letter assignments from the p-values using the multcompView library. Since we have a two-way ANOVA, one of which is on the x-axis and one of which dictates the color, we have to variables we need to assign letters for. One goes on the x-axis. We'll add the letters for the color-coding variable to the legend, to keep things legible.
+
 ```{r}
 library(multcompView)
 x_letters <- multcompLetters(tukey_p[[x_axis]])$Letters
@@ -854,6 +942,7 @@ names(for_legend) <- names(fill_letters)
 We also checked for interactions between variables. There are too many levels to depict these on the boxplots, so if there are interactions, we'll print them as a separate table.
 
 First, we have a failsafe to make sure we're only checking for interactions in cases where we ran a model with interactions.
+
 ```{r}
 int_exists <- tryCatch(
   expr = (length(tukey[[3]]) > -1),
@@ -864,6 +953,7 @@ int_exists <- tryCatch(
 ```
 
 Next, if we ran a model with interactions, we'll check to see if there were any significant interactions.
+
 ```{r}
 if (int_exists) {
   int <- which(tukey_p[[3]] < 0.05)
@@ -874,12 +964,14 @@ Finally, if there were any significant interactions, print them as a table
 ```{r}
 if(length(int) > 0){
   interaction_table <- tukey[[3]][int,]
-  interaction_table <- knitr::kable(interaction_table,
-                                    colnames=c("Comparison","Difference","Lower","Upper","Adjusted p-value"))
+  interaction_table <- as.data.frame(interaction_table)
+  colnames(interaction_table) <- c("Difference","Lower","Upper","Adjusted p-value")
 }
+interaction_table
 ```
 
 Now we can make a boxplot.
+
 ```{r}
 library(ggplot2)
 ggplot(data=spruce_log)+
@@ -897,9 +989,10 @@ ggplot(data=spruce_log)+
 We will perform two multiple regressions. We will try to use the full suite of measured variables to predict what treatment each observation was taken from. In other words, we will try to recover the CO2 treatment and the temperature treatment from the observed data. We will perform one regression for CO2 treatment and one regression for temperature treatment.
 
 
-We saw in the covariance matrices that none of the variables have a correlation coefficient above 0.6, so we are not concerned about multicolinearity.
+We saw in the covariance matrices that none of the variables have a correlation coefficient above 0.6, so we are not concerned about multicollinearity.
 
 First load the libraries necessary.
+
 ```{r}
 library(MASS)
 library(ggplot2)
@@ -1088,6 +1181,8 @@ The platonic ideal of a Q-Q plot. MBC is also already log transformed and it loo
 
 Now that we're satisfied that all model assumptions are met, we can perform the acutal SEM.
 
+Note that the 
+
 ```{r}
 library(piecewiseSEM)
 
@@ -1112,7 +1207,7 @@ spruce_psem <- psem(
   
 )
 
-summary(spruce_psem, .progressBar = FALSE)
+suppressWarnings(summary(spruce_psem, .progressBar = FALSE))
 ```
 
 Fisher's C and the chi-squared tests tell us that this model does not fit. Based on the t-rule, we can afford to add a maximum of 12 additional relationships without oversaturating our model, so let's look at the tests of directed separation (d-sep tests) above and see if there are any relationships there that are currently missing in our model, and that make biological sense to add in.
@@ -1123,7 +1218,7 @@ MBN and MBC could both have significant relationships with depth and experimenta
 spruce_psem <- update(spruce_psem,
        MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental_num,
        MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental_num)
-summary(spruce_psem)
+suppressWarnings(summary(spruce_psem, .progressBar = FALSE))
 ```
 
 The model itself still doesn't fit, but the R-squareds for MBN and MBC are much higher now! We still have 8 relationships remaining that we could add, so let's take another look at the d-sep tests. It looks like DOC and DN could be significantly affected by soil temperature. I'm willing to believe this could be the case, so I'll add it into my model.
@@ -1133,7 +1228,7 @@ The model itself still doesn't fit, but the R-squareds for MBN and MBC are much 
 spruce_psem <- update(spruce_psem,
                       DOC_unfumigated_soil ~ depth2 + Temp_experimental_num + CO2_treatment + temp,
                       DN_unfumigated_soil ~ depth2 + Temp_experimental_num + temp)
-summary(spruce_psem)
+suppressWarnings(summary(spruce_psem, .progressBar = FALSE))
 
 ```
 
@@ -1254,9 +1349,9 @@ spruce_num_psem <- psem(
 Out of curiosity, let's see if this performs any better than the SEM that had some categorical data.
 
 ```{r}
-summary(spruce_num_psem, .progressBar = FALSE)
-summary(spruce_num_psem, .progressBar = FALSE)$R2
-summary(spruce_psem, .progressBar = F)$R2
+suppressWarnings(summary(spruce_num_psem, .progressBar = FALSE))
+suppressWarnings(summary(spruce_num_psem, .progressBar = FALSE)$R2)
+suppressWarnings(summary(spruce_psem, .progressBar = FALSE)$R2)
 ```
 
 In fact, this is worse than the categorical SEM for explaining all endogenous variables. Let's compare AICs.
@@ -1271,10 +1366,13 @@ Categorical is better than numeric. Still, we can use it to get the structure of
 ### Plotting
 
 For whatever reason, the function piecewiseSEM::plot.psem() doesn't import for me from the library, so I copied it from the package's GitHub page and load it in manually.
+
 ```{r}
 source("./Code/plot_psem.R")
+library(DiagrammeR)
 ```
 
+#### Hypothesized path diagram
 
 First, we'll get the structure of our original hypothesis SEM, not the one we ended up with, to create our hypothesis diagram.
 
@@ -1340,6 +1438,8 @@ render_graph(diagram)
 #export_graph(diagram,"./Plots/hypothesis_sem.png",width = 1200, height = 800)
 ```
 
+#### Final path diagram
+
 Now, more for the sake of having it than anything else, we'll create a path diagram for the final numerical SEM and export it for loading into Shiny.
 
 ```{r}
@@ -1385,13 +1485,9 @@ Now we'll convert this to graphViz/DOT format, which is compatible with shiny, a
 dot <- generate_dot(diagram)
 
 # Save DOT output for use in graphViz/Shiny
-writeLines(dot,"./Plots/dot_psem.txt")
+#writeLines(dot,"./Plots/dot_psem.txt")
 
 # Also save the PSEM summary
-saveRDS(summary(spruce_num_psem),file = "./Analyses/psem_numeric_summary.RDS")
-
+#saveRDS(summary(spruce_num_psem),file = "./Analyses/psem_numeric_summary.RDS")
 
 ```
-
-
-## We'll also create a diagram to put in our Shiny app, basically for fun.
