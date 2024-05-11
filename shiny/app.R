@@ -108,7 +108,7 @@ ui <- dashboardPage(
                    tableOutput("interaction_table"),
                    # tableOutput("test_xletters"), # this and below: for testing
                    # tableOutput("test_forlegend"),
-                   # verbatimTextOutput("tukey_test"),
+                   # textOutput("tukey_test"),
                    # tableOutput("tukeyp_test") 
                )
         ))
@@ -277,7 +277,7 @@ server <- function(input, output){
   # test output
  #  output$test_xletters <- renderTable(x_letters())
  #  output$test_forlegend <- renderTable(for_legend())
- #  output$tukey_test <- renderText(int())
+ #  output$tukey_test <- renderPrint(tukey())
  #  output$tukey_test <- renderPrint({    # Lettering DF
  #    x_let <- x_letters()
  #    for_x <- input$x_choice
