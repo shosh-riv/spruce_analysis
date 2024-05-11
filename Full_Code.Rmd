@@ -720,7 +720,7 @@ spruce$Temp_experimental_num <- as.numeric(spruce$Temp_experimental)
 ```
 
 
-Finally, looking at the distributions of the variables (the diagonal of the covariance matrix), it looks like MBN, MBC, bacterial copy number, and archaeal copy number are all left skewed. Let's log transform these.
+Finally, looking at the distributions of the variables (the diagonal of the covariance matrix), it looks like MBN, MBC, bacterial copy number, and archaeal copy number are all right skewed. Let's log transform these.
 
 ```{r}
 spruce_log_scale <- spruce
@@ -912,6 +912,7 @@ library(car)
 We will make 2 smaller data frames containing only our predictors and response variable
 
 ```{r}
+d <- spruce_log
 CO2 <- d[, c(4, 7:14)]
 temp <- d[, c(3,7:14)]
 ```
@@ -996,3 +997,401 @@ plot(lm(formula = Temp_experimental ~ Bacteria_copy_dry + Archaea_copy_dry +
 ```
 The residuals vs fitted do look a bit odd, possibly because while our response variable takes values linearly distributed betweeen [0,9], it is categorical. Otherwise, the plots look acceptable. Otherwise, this follows the model assumptions quite well.
 
+# Structural Equation Modeling
+
+## Test model assumptions
+
+Our hypothesized SEM is detailed in the paper. We'll therefore jump right into testing the model assumptions of the underlying linear relationships of those hypotheses.
+
+Dissolved organic carbon
+```{r}
+DOC_lm <- lm(DOC_unfumigated_soil ~ depth2 + CO2_treatment + depth2, data=spruce_log_scale, na.action=na.omit)
+plot(DOC_lm)
+```
+
+This has a bit of a skew, but not so much that I'm concerned about it.
+
+Dissolved nitrogen
+
+```{r}
+DN_lm <- lm(DN_unfumigated_soil ~ depth2 + Temp_experimental, data=spruce_log_scale, na.action=na.omit)
+plot(DN_lm)
+```
+
+Pretty much the same behavior as DOC -- I'm fine with this.
+
+Soil temperature
+
+```{r}
+temp_lm <- lm(temp ~ Temp_experimental + depth2,
+              data=spruce_log_scale, na.action=na.omit)
+plot(temp_lm)
+```
+
+This is fine.
+
+Gravimetric water content
+
+```{r}
+GWC_lm <- lm(GWC ~ depth2 + PREC_6, data=spruce_log_scale, na.action=na.omit)
+plot(GWC_lm)
+```
+
+This is mostly fine, but definitely has a skew in the Q-Q plot. Let's check if it's better when log transformed.
+
+```{r}
+GWC_log_lm <- lm(log(GWC) ~ depth2 + PREC_6, data=spruce_log_scale, na.action=na.omit)
+plot(GWC_log_lm)
+```
+
+It actually skews it worse. Stick to the untransformed data.
+
+Bacteria copy number
+
+```{r}
+BCN_lm <- lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+             data=spruce_log_scale, na.action=na.omit)
+plot(BCN_lm)
+```
+The bacteria copy number is already log transformed, and it looks good. Points 108 and 135 are on the edge of being outliers, but we don't have methodological knowledge (such as those particular measurements being messed up on that particular day) to justify removing them, so we'll leave them alone.
+
+Archaea copy number 
+
+```{r}
+ACN_lm <- lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+             data=spruce_log_scale, na.action=na.omit)
+plot(ACN_lm)
+```
+Archaeal copy number is also already log transformed. I'm satisfied with how it looks.
+
+Microbial biomass nitrogen
+
+```{r}
+MBN_lm <- lm(MBN ~ DN_unfumigated_soil + temp + GWC,
+             data=spruce_log_scale, na.action=na.omit)
+plot(MBN_lm)
+```
+
+This is still fairly skewed, but it's already log-transformed, so it's not going to get any better. It's likely so skewed because of the right-skew that results from having multiple 0s that become 1 when we add 1 to log-transform.
+
+Microbial biomass carbon
+
+```{r}
+MBC_lm <- lm(MBC ~ DOC_unfumigated_soil + temp + GWC,
+             data=spruce_log_scale, na.action=na.omit)
+plot(MBC_lm)
+```
+
+The platonic ideal of a Q-Q plot. MBC is also already log transformed and it looks good.
+
+## SEM
+
+Now that we're satisfied that all model assumptions are met, we can perform the acutal SEM.
+
+```{r}
+library(piecewiseSEM)
+
+spruce_psem <- psem(
+  
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental_num + CO2_treatment, data=spruce_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental_num, data=spruce_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental_num + depth2,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + PREC_6, data=spruce_log_scale, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC,
+     data=spruce_log_scale, na.action=na.omit),
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC,
+     data=spruce_log_scale, na.action=na.omit)
+  
+)
+
+summary(spruce_psem, .progressBar = FALSE)
+```
+
+Fisher's C and the chi-squared tests tell us that this model does not fit. Based on the t-rule, we can afford to add a maximum of 12 additional relationships without oversaturating our model, so let's look at the tests of directed separation (d-sep tests) above and see if there are any relationships there that are currently missing in our model, and that make biological sense to add in.
+
+MBN and MBC could both have significant relationships with depth and experimental temperature. We expected these relationships to be primarily indirect, i.e. mediated by intermediate variables, within the SEM, but it looks like the direct relationships between these variables are also important. This makes biological sense so I'll add them in.
+
+```{r}
+spruce_psem <- update(spruce_psem,
+       MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental_num,
+       MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental_num)
+summary(spruce_psem)
+```
+
+The model itself still doesn't fit, but the R-squareds for MBN and MBC are much higher now! We still have 8 relationships remaining that we could add, so let's take another look at the d-sep tests. It looks like DOC and DN could be significantly affected by soil temperature. I'm willing to believe this could be the case, so I'll add it into my model.
+
+
+```{r}
+spruce_psem <- update(spruce_psem,
+                      DOC_unfumigated_soil ~ depth2 + Temp_experimental_num + CO2_treatment + temp,
+                      DN_unfumigated_soil ~ depth2 + Temp_experimental_num + temp)
+summary(spruce_psem)
+
+```
+
+At this point, there are only 6 more relationships that could be added, and I feel I'm running the risk of moving the model too far away from my original hypotheses in search of significant p-values, so I'll stop here and draw the conclusion that SEM is not suitable for this dataset.
+
+## Create hypothesized path diagram
+
+Although we ultimately can't draw conclusions from our SEM, we still need a diagram for our initial hypothesis. This is easiest to create from an already-extant SEM using built in functions from piecewiseSEM and DiagrammeR.
+
+### Numeric dataset
+
+To create a diagram, we need to have all-numeric data, so let's make all of our variables numeric.
+
+```{r}
+spruce_num <- spruce
+```
+
+Temperature treatment
+
+```{r}
+unique(spruce_num$Temp_experimental)
+spruce_num$Temp_experimental <- as.numeric(spruce_num$Temp_experimental)
+```
+
+CO2 treatment
+
+```{r}
+unique(spruce_num$CO2_treatment)
+```
+
+A is ambient, and E is elevated 500 ppm above ambient. Change these to 0 and 1.
+
+```{r}
+spruce_num[which(spruce_num$CO2_treatment=="A"),"CO2_treatment"] <- 0
+spruce_num[which(spruce_num$CO2_treatment=="E"),"CO2_treatment"] <- 1
+spruce_num$CO2_treatment <- as.numeric(spruce_num$CO2_treatment)
+```
+
+Depth
+
+```{r}
+unique(spruce_num$depth2)
+```
+
+Take the top of the range (i.e. the smaller number) as representative of the soil range.
+
+```{r}
+spruce_num$depth2 <- stringr::str_extract(spruce_num$depth2,"(\\d+)_",group=1)
+spruce_num$depth2 <- as.numeric(spruce_num$depth2)
+```
+
+Log-transform and scale numeric data
+
+```{r}
+spruce_num_log_scale <- spruce_num
+
+# Variables to transform
+to_transform <- c("Bacteria_copy_dry","Archaea_copy_dry","MBN","MBC")
+
+# Check for 0s
+apply(spruce_num_log_scale[,to_transform],2,FUN=min,na.rm=T)
+```
+
+Add 1 to MBC and MBN because they include 0
+
+```{r}
+spruce_num_log_scale$MBN <- spruce_num_log_scale$MBN + 1
+spruce_num_log_scale$MBC <- spruce_num_log_scale$MBC + 1
+
+# Log-transformation
+spruce_num_log_scale[,to_transform] <- log(spruce_num_log_scale[,to_transform])
+```
+
+Scale all numerical values
+
+```{r}
+# Vector of numeric columns
+to_scale <- unlist(lapply(spruce_num_log_scale, is.numeric), use.names = FALSE)
+
+# Make plot into a character
+spruce_num_log_scale$Plot <- as.character(spruce_num_log_scale$Plot)
+
+# Redo the vector of numeric columns
+to_scale <- unlist(lapply(spruce_num_log_scale, is.numeric), use.names = FALSE)
+
+# Scale columns
+spruce_num_log_scale[,to_scale] <- scale(spruce_num_log_scale[,to_scale])
+
+# Remove any NA rows (just in case)
+spruce_num_log_scale_noNA <- na.omit(spruce_num_log_scale)
+```
+
+Now we'll fit our final model from before, with this numerical dataset.
+
+```{r}
+spruce_num_psem <- psem(
+  
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment + temp, data=spruce_num_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental + temp, data=spruce_num_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + depth2,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + PREC_6, data=spruce_num_log_scale, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC + depth2 + Temp_experimental,
+     data=spruce_num_log_scale, na.action=na.omit)
+  
+)
+```
+
+Out of curiosity, let's see if this performs any better than the SEM that had some categorical data.
+
+```{r}
+summary(spruce_num_psem, .progressBar = FALSE)
+summary(spruce_num_psem, .progressBar = FALSE)$R2
+summary(spruce_psem, .progressBar = F)$R2
+```
+
+In fact, this is worse than the categorical SEM for explaining all endogenous variables. Let's compare AICs.
+
+```{r}
+# Compare AICs:
+AIC_psem(spruce_psem)
+AIC_psem(spruce_num_psem)
+```
+Categorical is better than numeric. Still, we can use it to get the structure of our plot.
+
+### Plotting
+
+For whatever reason, the function piecewiseSEM::plot.psem() doesn't import for me from the library, so I copied it from the package's GitHub page and load it in manually.
+```{r}
+source("./Code/plot_psem.R")
+```
+
+
+First, we'll get the structure of our original hypothesis SEM, not the one we ended up with, to create our hypothesis diagram.
+
+```{r}
+spruce_num_psem_init <- psem(
+  
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment, data=spruce_num_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental, data=spruce_num_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + depth2,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + PREC_6, data=spruce_num_log_scale, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit)
+  
+)
+
+
+diagram <- plot.psem(spruce_num_psem_init,digits=0, return=T, layout="tree")
+```
+
+We now have a list item describing the different aspects of the path diagram. Let's go in and manually edit these to make the diagram look nicer.
+
+```{r}
+# Readable labels
+diagram$nodes_df$label <- c("DOC","DN","Soil\ntemp.","GWC","Bacteria",
+                            "Archaea","MBN","MBC","Depth","Exp.\ntemp.",
+                            "CO2\nlevel","Precip.")
+
+# Different shapes for exogenous and endogenous variables
+diagram$nodes_df$shape <- c(rep("oval",times=8),rep("rectangle",times=4))
+
+# Change layout
+diagram$global_attrs[1,2] <- "dot"
+
+# Make nodes a little wider
+diagram$global_attrs[8,2] <- 0.6
+
+# Make all arrows solid
+diagram$edges_df$style <- "solid"
+
+# Change colors of edges
+diagram$edges_df$color <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")[diagram$edges_df$to]
+
+# Change colors of boxes
+diagram$nodes_df$color <- c(RColorBrewer::brewer.pal(n = 8, name = "Dark2"),rep("black",times=4))
+
+# Remove edge numbers
+diagram$edges_df$label <- NA
+
+# Check how it looks
+render_graph(diagram)
+
+# Save diagram
+#export_graph(diagram,"./Plots/hypothesis_sem.png",width = 1200, height = 800)
+```
+
+Now, more for the sake of having it than anything else, we'll create a path diagram for the final numerical SEM and export it for loading into Shiny.
+
+```{r}
+# Get diagram structure from final model structure, made using numeric dataset
+diagram <- plot.psem(spruce_num_psem,digits=2, return=T, layout="tree")
+
+## Modify the nodes DF
+# Readable labels
+diagram$nodes_df$label <- c("DOC","DN","Soil\ntemp.","GWC","Bacteria",
+                            "Archaea","MBN","MBC","Depth","Exp.\ntemp.",
+                            "CO2\nlevel","Precip.")
+
+# Different shapes for exogenous and endogenous variables
+diagram$nodes_df$shape <- c(rep("oval",times=8),rep("rectangle",times=4))
+
+# Change layout
+diagram$global_attrs[1,2] <- "dot"
+
+# Make nodes a little wider
+diagram$global_attrs[8,2] <- 0.6
+
+# Change colors of edges
+diagram$edges_df$color <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")[diagram$edges_df$to]
+
+# Change colors of boxes
+diagram$nodes_df$color <- c(RColorBrewer::brewer.pal(n = 8, name = "Dark2"),rep("black",times=4))
+
+# Convert node ID numbers to descriptions so the mouseover will be descriptive
+node_ids <- diagram$nodes_df$label
+names(node_ids) <-  diagram$nodes_df$id
+diagram$nodes_df$id <-diagram$nodes_df$label
+
+diagram$edges_df$from <- node_ids[diagram$edges_df$from]
+diagram$edges_df$to <- node_ids[diagram$edges_df$to]
+
+# See how it all looks
+render_graph(diagram)
+```
+
+Now we'll convert this to graphViz/DOT format, which is compatible with shiny, and we'll save this as a text document so that it can be imported into the shiny app and parsed by DiagrammeR there.
+
+```{r}
+dot <- generate_dot(diagram)
+
+# Save DOT output for use in graphViz/Shiny
+writeLines(dot,"./Plots/dot_psem.txt")
+
+# Also save the PSEM summary
+saveRDS(summary(spruce_num_psem),file = "./Analyses/psem_numeric_summary.RDS")
+
+
+```
+
+
+## We'll also create a diagram to put in our Shiny app, basically for fun.
