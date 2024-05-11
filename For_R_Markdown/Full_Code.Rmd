@@ -22,15 +22,17 @@ Downloaded from here: https://www.dropbox.com/scl/fo/o9zh9o3smmjg54l20aj2r/AEb8U
 
 Metadata available here: https://mnspruce.ornl.gov/datasets/spruce-whole-ecosystems-warming-wew-environmental-data-beginning-august-2015
 
+Because the number of files necessary to run this chunk is relatively large and inconvenient (separate folder of 12 CSVs), we have set these chunks not to run. Their output can be viewed in the HTML file "Full_Code.html" included in the subfolder "./Full_Code_Run/".
+
 These data were taken every half hour, every day, in each plot.
 Before doing anything else, we have to combine the environmental data for all plots into a single dataset, limit it to our year of interest (2021).
 
-There is a separate file for each plot, all downloaded into one folder. Because that's a lot of files/data, we have not included this raw data in our submission, but we can provide it or it can be downloaded at the above links if necessary.
+There is a separate file for each plot, all downloaded into one folder. Because that's a lot of files/data, we have not included this raw data in our submission, but we can provide it or it can be downloaded at the above links if necessary. All code from section "1.1.2 Reduce environmental data" onward will run using the files provided in the "For_R_Markdown/" folder.
 
 First read in the files.
-```{r}
+```{r, eval=F}
 # Vector of all files
-env_filenames <- list.files("../Data/Raw/WEW_Complete_Environ_20220518/",full.names = T)
+env_filenames <- list.files("./Data/Raw/WEW_Complete_Environ_20220518/",full.names = T)
 
 # Read in all as single list object
 env_data_list <- lapply(env_filenames,read.csv)
@@ -47,7 +49,7 @@ for(i in 1:length(env_data_list)){
 ```
 
 Now we'll do some basic checks that all dataframes have the same structure, and then combine them into a single dataframe.
-```{r}
+```{r, eval=F}
 # Column names of first dataset
 plot4_env_cols <- colnames(env_data_list$PLOT_04)
 
@@ -65,7 +67,7 @@ All datasets have the same columns!
 
 Limit to just the year 2021 for all data (do this before combining into one DF to avoid having a ridiculously large DF)
 
-```{r}
+```{r, eval=F}
 env_data_list_2021 <- lapply(env_data_list,FUN=function(x){
   return(x[x$Year==2021,])
 })
@@ -76,7 +78,7 @@ lapply(env_data_list_2021,FUN=function(x)unique(x$Year))
 
 What are the dimensions of each dataset?
 
-```{r}
+```{r, eval=F}
 # What's the dimensions of each dataset?
 lapply(env_data_list_2021,FUN=dim)
 ```
@@ -89,20 +91,20 @@ Each plot has 17,520 observations for the year 2021, which is correct (48 observ
 
 Combine into one dataframe
 
-```{r}
+```{r, eval=F}
 env_data <- data.table::rbindlist(env_data_list_2021)
 ```
 
 Now let's check for irregularities in the data.
 
-```{r}
+```{r, eval=F}
 summary(env_data)
 ```
 
 Several columns have a few hundred NAs, but in a dataset with 210,240 observations this is neither surprising nor concerning. The deeper soil temperature measurements (TS_.100_A8, TS_.200_A9,TS_.100__C8, TS_.200__C9) have a couple thousand NAs -- maybe there were more equipment failures at lower depths, e.g. due to the higher pressure required to insert and remove equipment. It's interesting that this doesn't seem to have been the case in zone B, only in zones A and C. PREC_6 has 43,401 NAs, and seems to consist primarily of 0s. PREC_6 is the total mm of rainfall at 6 m on the central tower, at 30 minute intervals, so it makes sense why it's mostly 0s (it's not raining more often than it rains). I'm not sure why there are so many NAs, though.
 
 Are the NAs mostly in the same rows? This could indicate equipment failures on specific days.
-```{r}
+```{r, eval=F}
 # Get the total number of NAs in each row
 row_nas <- rowSums(is.na(env_data))
 summary(row_nas)
@@ -111,12 +113,12 @@ hist(row_nas)
 
 Impossible to get a good look from this histogram. Narrow down to 0-20
 
-```{r}
+```{r, eval=F}
 hist(row_nas,breaks=c(seq(0,20,1),length(row_nas)),xlim=c(0,20))
 ```
 
 The majority of rows have 0 NAs. Remove all of these to get a better look
-```{r}
+```{r, eval=F}
 row_nas <- row_nas[row_nas>0]
 summary(row_nas)
 hist(row_nas)
@@ -125,19 +127,19 @@ hist(row_nas,breaks=c(seq(0,91,1)))
 
 Looks like most rows that have NAs only have 1, and almost all have fewer than 5.
 
-```{r}
+```{r, eval=F}
 sum(row_nas == 91); sum(row_nas>50); sum(row_nas>20)
 ```
 
 269 rows have 91 NAs; 471 more than 50; 491 more than 20.
 
-```{r}
+```{r, eval=F}
 sum(row_nas < 20); sum(row_nas==1)
 ```
 
 By contrast, 46,993 rows have fewer than 20 NAs; of these, 40,672 rows have only 1 NA. So no, the NAs are not mostly the same rows. However, this is probably because PREC_6 has so many more NAs than any other column. What happens if we do the same thing with PREC_6 removed?
 
-```{r}
+```{r, eval=F}
 row_nas_nop <- rowSums(is.na(as.data.frame(env_data)[,c(which(colnames(env_data)!="PREC_6"))]))
 summary(row_nas_nop)
 
@@ -154,25 +156,25 @@ Year.Fraction, WS_10, PAR_2, and plot_number should all be numeric.
 
 Year.Fraction
 
-```{r}
+```{r, eval=F}
 head(env_data$Year.Fraction)
 ```
 
 no immediately visible reason to not be numeric
 
-```{r}
+```{r, eval=F}
 test <- as.numeric(env_data$Year.Fraction)
 sum(is.na(test))
 ```
 
 no NAs ==> no incorrect conversions from character to numeric. Convert to numeric
-```{r}
+```{r, eval=F}
 env_data$Year.Fraction <- as.numeric(env_data$Year.Fraction)
 ```
 
 WS_10
 
-```{r}
+```{r, eval=F}
 head(env_data$WS_10,50)
 test <- as.numeric(env_data$WS_10)
 sum(is.na(test))==sum(is.na(env_data$WS_10))
@@ -180,19 +182,19 @@ sum(is.na(test))==sum(is.na(env_data$WS_10))
 
 Which columns became NA when converting to numeric?
 
-```{r}
+```{r, eval=F}
 bad <- which(is.na(test) & !is.na(env_data$WS_10))
 unique(env_data[bad,"WS_10"])
 ```
 They're all just empty. It's correct to convert them to NA so we can make the conversion.
 
-```{r}
+```{r, eval=F}
 env_data$WS_10 <- as.numeric(env_data$WS_10)
 ```
 
 PAR_2
 
-```{r}
+```{r, eval=F}
 head(env_data$PAR_2,50)
 test <- as.numeric(env_data$PAR_2)
 sum(is.na(test))==sum(is.na(env_data$PAR_2))
@@ -202,7 +204,7 @@ unique(env_data[bad,"PAR_2"])
 
 It looks like entries in the 1000s were sometimes written with a comma, causing them to register as character and not convert to numeric. Remove all commas in the column and then convert to numeric
 
-```{r}
+```{r, eval=F}
 test<-env_data$PAR_2
 test2<-gsub(",","",test)
 test3 <- as.numeric(test2)
@@ -211,7 +213,7 @@ sum(is.na(test3))==sum(is.na(test))
 
 Confirm the commas were the only problem
 
-```{r}
+```{r, eval=F}
 env_data$PAR_2 <- gsub(",","",env_data$PAR_2)
 env_data$PAR_2 <- as.numeric(env_data$PAR_2)
 
@@ -223,19 +225,19 @@ Currently, we have the environmental data for every half hour of the whole year.
 
 Rename dataframe for clarity, make dataframe (was data.table)
 
-```{r}
+```{r, eval=F}
 env_data_full <- data.frame(env_data)
 ```
 
 Names of columns that remain relevant with daily data (timestamp, etc. become unnecessary) and environmental data except for precipitation
 
-```{r}
+```{r, eval=F}
 daily_cols <- colnames(env_data_full)[c(1,6,8:(ncol(env_data_full)-2))]
 ```
 
 Sum up precipitation by day and plot
 
-```{r}
+```{r, eval=F}
 daily_precip <- aggregate(env_data_full[,"PREC_6"],
                             by=list(env_data_full$Day_of_Year,
                                     env_data_full$Plot),
@@ -245,7 +247,7 @@ colnames(daily_precip) <- c("Day_of_Year","Plot","PREC_6")
 
 Aggregate the other data by averaging over day and plot, removing NAs from the calculations
 
-```{r}
+```{r, eval=F}
 env_data_daily <- aggregate(env_data_full[,daily_cols],
                             by=list(env_data_full$Day_of_Year,
                                     env_data_full$Plot),
@@ -254,26 +256,26 @@ env_data_daily <- aggregate(env_data_full[,daily_cols],
 
 Group.1 and Group.2 should be extraneous - they are the same as Day_of_Year and Plot. Let's confirm this quickly.
 
-```{r}
+```{r, eval=F}
 sum(env_data_daily$Group.1==env_data_daily$Day_of_Year) == nrow(env_data_daily)
 sum(env_data_daily$Group.2==env_data_daily$Plot) == nrow(env_data_daily)
 ```
 Yes, it's fine to remove those columns.
 
-```{r}
+```{r, eval=F}
 env_data_daily$Group.1 <- NULL
 env_data_daily$Group.2 <- NULL
 ```
 
 Now we can merge this with the precipitation data.
 
-```{r}
+```{r, eval=F}
 env_data_daily <- merge(env_data_daily,daily_precip,by=c("Day_of_Year","Plot"))
 ```
 
 Let's make sure this all worked the way we wanted it to.
 
-```{r}
+```{r, eval=F}
 table(env_data_daily$Plot)
 ```
 Each of the 12 plots has 365 entries, one for every day of the year. This is correct.
@@ -281,13 +283,13 @@ Each of the 12 plots has 365 entries, one for every day of the year. This is cor
 
 We'll now do some checks on missing data in this aggregated environmental dataset. First, we'll check the overall structure of the new dataset.
 
-```{r}
+```{r, eval=F}
 summary(env_data_daily)
 ```
 
 Quite a few columns have 2 NAs -- assume this is a complete lack of data for that column on that day, but check in larger dataset to make sure.
 
-```{r}
+```{r, eval=F}
 env_data_daily[which(is.na(env_data_daily$TS_0__A1)),c("Day_of_Year","Plot")]
 env_data_full[which(env_data_full$Day_of_Year==226 &
                       env_data_full$Plot==10),"TS_0__A1"]
@@ -302,9 +304,10 @@ the ones that had thousands of NAs in the half-hourly dataset, so this isn't
 surprising and doesn't need to be investigated further.
 
 Save this daily data.
-```{f}
+```{f, eval=F}
 #write.csv(env_data_daily,"./Data/Clean/dailymean_environmental_data_2021.csv",row.names = F)
 ```
+
 This dataset and all others moving forward are included with the submission and on the GitHub in the folder "For_R_Markdown". We will comment out all calls to write.csv() so as not to overwrite anything, but include the calls nonetheless so that you can see the file names.
 
 Now that we have usable environmental data, we'll have a think about what we want to use for our analysis and whittle it down to those variables.
