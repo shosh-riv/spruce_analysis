@@ -20,16 +20,16 @@ edge [fontname = 'Helvetica',
      color = 'gray80',
      arrowsize = '0.5']
 
-  'DOC' [label = 'DOC', shape = 'oval', color = 'black', fillcolor = 'white'] 
-  'DN' [label = 'DN', shape = 'oval', color = 'black', fillcolor = 'white'] 
+  'DOC' [label = 'DOC', shape = 'oval', color = '#1B9E77', fillcolor = 'white'] 
+  'DN' [label = 'DN', shape = 'oval', color = '#D95F02', fillcolor = 'white'] 
   'Soil
 temp.' [label = 'Soil
-temp.', shape = 'oval', color = 'black', fillcolor = 'white'] 
-  'GWC' [label = 'GWC', shape = 'oval', color = 'black', fillcolor = 'white'] 
-  'Bacteria' [label = 'Bacteria', shape = 'oval', color = 'black', fillcolor = 'white'] 
-  'Archaea' [label = 'Archaea', shape = 'oval', color = 'black', fillcolor = 'white'] 
-  'MBN' [label = 'MBN', shape = 'oval', color = 'black', fillcolor = 'white'] 
-  'MBC' [label = 'MBC', shape = 'oval', color = 'black', fillcolor = 'white'] 
+temp.', shape = 'oval', color = '#7570B3', fillcolor = 'white'] 
+  'GWC' [label = 'GWC', shape = 'oval', color = '#E7298A', fillcolor = 'white'] 
+  'Bacteria' [label = 'Bacteria', shape = 'oval', color = '#66A61E', fillcolor = 'white'] 
+  'Archaea' [label = 'Archaea', shape = 'oval', color = '#E6AB02', fillcolor = 'white'] 
+  'MBN' [label = 'MBN', shape = 'oval', color = '#A6761D', fillcolor = 'white'] 
+  'MBC' [label = 'MBC', shape = 'oval', color = '#666666', fillcolor = 'white'] 
   'Depth' [label = 'Depth', shape = 'rectangle', color = 'black', fillcolor = 'white'] 
   'Exp.
 temp.' [label = 'Exp.
@@ -38,47 +38,47 @@ temp.', shape = 'rectangle', color = 'black', fillcolor = 'white']
 level' [label = 'CO2
 level', shape = 'rectangle', color = 'black', fillcolor = 'white'] 
   'Precip.' [label = 'Precip.', shape = 'rectangle', color = 'black', fillcolor = 'white'] 
-'Depth'->'DOC' [style = 'solid', color = 'black', label = ' -0.3 '] 
+'Depth'->'DOC' [style = 'solid', color = '#1B9E77', label = ' -0.34 '] 
 'Exp.
-temp.'->'DOC' [style = 'solid', color = 'black', label = ' 0.3 '] 
+temp.'->'DOC' [style = 'solid', color = '#1B9E77', label = ' 0.26 '] 
 'CO2
-level'->'DOC' [style = 'dashed', color = 'black', label = ' 0.1 '] 
+level'->'DOC' [style = 'dashed', color = '#1B9E77', label = ' 0.08 '] 
 'Soil
-temp.'->'DOC' [style = 'dashed', color = 'black', label = ' -0.2 '] 
-'Depth'->'DN' [style = 'solid', color = 'black', label = ' -0.3 '] 
+temp.'->'DOC' [style = 'dashed', color = '#1B9E77', label = ' -0.24 '] 
+'Depth'->'DN' [style = 'solid', color = '#D95F02', label = ' -0.25 '] 
 'Exp.
-temp.'->'DN' [style = 'solid', color = 'black', label = ' 0.4 '] 
+temp.'->'DN' [style = 'solid', color = '#D95F02', label = ' 0.4 '] 
 'Soil
-temp.'->'DN' [style = 'solid', color = 'black', label = ' -0.6 '] 
+temp.'->'DN' [style = 'solid', color = '#D95F02', label = ' -0.55 '] 
 'Exp.
 temp.'->'Soil
-temp.' [style = 'solid', color = 'black', label = ' 0.5 '] 
+temp.' [style = 'solid', color = '#7570B3', label = ' 0.55 '] 
 'Depth'->'Soil
-temp.' [style = 'solid', color = 'black', label = ' -0.7 '] 
-'Depth'->'GWC' [style = 'dashed', color = 'black', label = ' 0 '] 
-'Precip.'->'GWC' [style = 'solid', color = 'black', label = ' 0.3 '] 
-'DOC'->'Bacteria' [style = 'dashed', color = 'black', label = ' 0 '] 
-'DN'->'Bacteria' [style = 'dashed', color = 'black', label = ' 0 '] 
+temp.' [style = 'solid', color = '#7570B3', label = ' -0.65 '] 
+'Depth'->'GWC' [style = 'dashed', color = '#E7298A', label = ' -0.03 '] 
+'Precip.'->'GWC' [style = 'solid', color = '#E7298A', label = ' 0.3 '] 
+'DOC'->'Bacteria' [style = 'dashed', color = '#66A61E', label = ' -0.01 '] 
+'DN'->'Bacteria' [style = 'dashed', color = '#66A61E', label = ' 0.04 '] 
 'Soil
-temp.'->'Bacteria' [style = 'solid', color = 'black', label = ' 0.3 '] 
-'GWC'->'Bacteria' [style = 'solid', color = 'black', label = ' 0.5 '] 
-'DOC'->'Archaea' [style = 'solid', color = 'black', label = ' -0.3 '] 
-'DN'->'Archaea' [style = 'solid', color = 'black', label = ' 0.3 '] 
+temp.'->'Bacteria' [style = 'solid', color = '#66A61E', label = ' 0.29 '] 
+'GWC'->'Bacteria' [style = 'solid', color = '#66A61E', label = ' 0.55 '] 
+'DOC'->'Archaea' [style = 'solid', color = '#E6AB02', label = ' -0.25 '] 
+'DN'->'Archaea' [style = 'solid', color = '#E6AB02', label = ' 0.25 '] 
 'Soil
-temp.'->'Archaea' [style = 'dashed', color = 'black', label = ' -0.1 '] 
-'GWC'->'Archaea' [style = 'solid', color = 'black', label = ' 0.3 '] 
-'DN'->'MBN' [style = 'solid', color = 'black', label = ' -0.3 '] 
+temp.'->'Archaea' [style = 'dashed', color = '#E6AB02', label = ' -0.11 '] 
+'GWC'->'Archaea' [style = 'solid', color = '#E6AB02', label = ' 0.31 '] 
+'DN'->'MBN' [style = 'solid', color = '#A6761D', label = ' -0.29 '] 
 'Soil
-temp.'->'MBN' [style = 'solid', color = 'black', label = ' 0.6 '] 
-'GWC'->'MBN' [style = 'solid', color = 'black', label = ' 0.2 '] 
-'Depth'->'MBN' [style = 'dashed', color = 'black', label = ' -0.1 '] 
+temp.'->'MBN' [style = 'solid', color = '#A6761D', label = ' 0.65 '] 
+'GWC'->'MBN' [style = 'solid', color = '#A6761D', label = ' 0.18 '] 
+'Depth'->'MBN' [style = 'dashed', color = '#A6761D', label = ' -0.08 '] 
 'Exp.
-temp.'->'MBN' [style = 'solid', color = 'black', label = ' -0.3 '] 
-'DOC'->'MBC' [style = 'dashed', color = 'black', label = ' -0.1 '] 
+temp.'->'MBN' [style = 'solid', color = '#A6761D', label = ' -0.32 '] 
+'DOC'->'MBC' [style = 'dashed', color = '#666666', label = ' -0.13 '] 
 'Soil
-temp.'->'MBC' [style = 'solid', color = 'black', label = ' 0.6 '] 
-'GWC'->'MBC' [style = 'solid', color = 'black', label = ' 0.3 '] 
-'Depth'->'MBC' [style = 'dashed', color = 'black', label = ' 0 '] 
+temp.'->'MBC' [style = 'solid', color = '#666666', label = ' 0.55 '] 
+'GWC'->'MBC' [style = 'solid', color = '#666666', label = ' 0.35 '] 
+'Depth'->'MBC' [style = 'dashed', color = '#666666', label = ' -0.01 '] 
 'Exp.
-temp.'->'MBC' [style = 'solid', color = 'black', label = ' -0.2 '] 
+temp.'->'MBC' [style = 'solid', color = '#666666', label = ' -0.21 '] 
 }
