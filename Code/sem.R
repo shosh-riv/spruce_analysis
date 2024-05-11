@@ -429,8 +429,68 @@ diagram <- plot.psem(spruce_num_psem,digits=1, return=T, layout="tree")
 plot.psem(spruce_num_psem,layout="tree")
 
 
-#### Plotting ####
+##### Plotting #####
+#### Hypothesis path diagram ###
+# Original model run with numeric data
+spruce_psem <- psem(
+  
+  # Intermediate layer: DOC, DN, temperature, GWC
+  lm(DOC_unfumigated_soil ~ depth2 + Temp_experimental + CO2_treatment, data=spruce_num_log_scale, na.action=na.omit),
+  lm(DN_unfumigated_soil ~ depth2 + Temp_experimental, data=spruce_num_log_scale, na.action=na.omit),
+  lm(temp ~ Temp_experimental + depth2,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(GWC ~ depth2 + PREC_6, data=spruce_num_log_scale, na.action=na.omit),
+  
+  # Predicted variables layer: Bacteria and Archaea copy numbers, MBN, MBC
+  lm(Bacteria_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(Archaea_copy_dry ~ DOC_unfumigated_soil + DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBN ~ DN_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit),
+  lm(MBC ~ DOC_unfumigated_soil + temp + GWC,
+     data=spruce_num_log_scale, na.action=na.omit)
+  
+)
 
+
+diagram <- plot.psem(spruce_num_psem,digits=0, return=T, layout="tree")
+plot.psem(spruce_psem,layout="tree",digits=0)
+
+## Modify the nodes DF
+# Readable labels
+diagram$nodes_df$label <- c("DOC","DN","Soil\ntemp.","GWC","Bacteria",
+                            "Archaea","MBN","MBC","Depth","Exp.\ntemp.",
+                            "CO2\nlevel","Precip.")
+
+# Different shapes for exogenous and endogenous variables
+diagram$nodes_df$shape <- c(rep("oval",times=8),rep("rectangle",times=4))
+
+# Change layout
+diagram$global_attrs[1,2] <- "dot"
+
+# Make nodes a little wider
+diagram$global_attrs[8,2] <- 0.6
+
+# Make all arrows solid
+diagram$edges_df$style <- "solid"
+
+# Change colors of edges
+diagram$edges_df$color <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")[diagram$edges_df$to]
+
+# Change colors of boxes
+diagram$nodes_df$color <- c(RColorBrewer::brewer.pal(n = 8, name = "Dark2"),rep("black",times=4))
+
+# Remove edge numbers
+diagram$edges_df$label <- NA
+
+# Check how it looks
+render_graph(diagram)
+
+# Save diagram
+export_graph(diagram,"./Plots/hypothesis_sem.png",width = 1200, height = 800)
+
+#### Final path diagram ####
 ## Modify the nodes DF
 # Readable labels
 diagram$nodes_df$label <- c("DOC","DN","Soil\ntemp.","GWC","Bacteria",
